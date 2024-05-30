@@ -60,6 +60,10 @@ class PointCloudSubscriber(Node):
         self.pc_performance_monitor = PCPerformanceMonitor()
         self.label_colors = np.random.rand(1000, 3)
 
+        # Initialize z-range parameters for passthrough filter
+        self.z_min = -0.05
+        self.z_max = 2.0
+
     def pointcloud_callback(self, msg):
 
         #self.vis.clear_geometries()
@@ -73,9 +77,9 @@ class PointCloudSubscriber(Node):
         # takes about 6 ms extra
         # pc2_points = np.array(list(pc2_points))        
 
-        # takes about .8 ms extra
-        inf_idx = np.isinf(pc2_points_64).any(axis=1)
-        pc2_points_64 = pc2_points_64[~inf_idx]
+        # Apply z passthrough filter and remove points with NaN or infinite values in one step
+        valid_idx = (pc2_points_64[:, 2] >= self.z_min) & (pc2_points_64[:, 2] <= self.z_max) & ~np.isinf(pc2_points_64).any(axis=1)
+        pc2_points_64 = pc2_points_64[valid_idx]
 
         # Update the point cloud
         self.pcd.points = o3d.utility.Vector3dVector(pc2_points_64)
