@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'open3d_pc_viz = ermis_cloud_proc_py.open3d_pc_viz:main',
+            'open3d_nocolor_pc_viz = ermis_cloud_proc_py.open3d_nocolor_pc_viz:main',
         ],
     },
 )

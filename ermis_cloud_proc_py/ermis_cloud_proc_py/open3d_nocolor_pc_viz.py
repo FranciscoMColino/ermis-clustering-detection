@@ -41,48 +41,31 @@ class PointCloudSubscriber(Node):
         start = time.time()
 
         # Convert ROS PointCloud2 message to numpy array
-        pc2_data = pc2.read_points_numpy(msg, field_names=("x", "y", "z", 'rgb'), skip_nans=True)
-        # separate the rgb values
-        pc2_data = np.array(list(pc2_data))
-        pc2_points = pc2_data[:, :3]
+        pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
+        pc2_points_64 = pc2_points.astype(np.float64)
 
-        # Unpack RGB values
-        pc2_colors = pc2_data[:, 3]
-        colors = np.zeros((pc2_colors.size, 3), dtype=np.float32)
+        # takes about 6 ms extra
+        # pc2_points = np.array(list(pc2_points))        
 
-        for i, color in enumerate(pc2_colors):
-            packed = struct.unpack('I', struct.pack('f', color))[0]
-            r = (packed & 0x00FF0000) >> 16
-            g = (packed & 0x0000FF00) >> 8
-            b = (packed & 0x000000FF)
-            colors[i, :] = [r, g, b]
+        # takes about .8 ms extra
+        inf_idx = np.isinf(pc2_points_64).any(axis=1)
+        pc2_points_64 = pc2_points_64[~inf_idx]
 
-        colors /= 255.0
-
-        
-
-        # get indexes where points are infinite
-        inf_idx = np.isinf(pc2_points).any(axis=1)
-
-        # remove infinite points from both the point cloud and the colors
-        pc2_points = pc2_points[~inf_idx]
-        colors = colors[~inf_idx]
-
-        #print(f'Removing {inf_idx.sum()} infinite points.')
-        
         # Update the point cloud
-        self.pcd.points = o3d.utility.Vector3dVector(pc2_points)
-        self.pcd.colors = o3d.utility.Vector3dVector(colors)
+        self.pcd.points = o3d.utility.Vector3dVector(pc2_points_64)
+
+        
 
         self.pcd.voxel_down_sample(voxel_size=0.05)
 
         end = time.time()
+
         elapsed_time = end - start
         self.pc_performance_monitor.update(elapsed_time)
 
         # print current elapsed fps and mean elapsed fps
 
-        print(f'FPS: {(1/elapsed_time):.4f}')
+        print(f'FPS: {(1/elapsed_time):.2f} ; Elapsed time: {(elapsed_time*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f} ; Mean Elapsed time: {(self.pc_performance_monitor.get_mean()*1000):.2f}')
 
 
         if self.first_run:
