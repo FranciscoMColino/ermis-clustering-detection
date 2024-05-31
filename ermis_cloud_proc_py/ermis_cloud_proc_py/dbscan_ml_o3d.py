@@ -6,28 +6,18 @@ import sensor_msgs_py.point_cloud2 as pc2
 import numpy as np
 import struct
 import time
+import argparse  # New import for argument parsing
+
+from ermis_cloud_proc_py.utils.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.utils.perf_csv_recorder import PerformanceCSVRecorder
 
 import mlpack
-
-class PCPerformanceMonitor():
-    def __init__(self):
-        self.num_measurements = 0
-        self.current_mean = 0
-
-    def update(self, new_measurement):
-        self.num_measurements += 1
-        self.current_mean = (self.current_mean * (self.num_measurements - 1) + new_measurement) / self.num_measurements
-
-    def get_mean(self):
-        return self.current_mean
 
 # TODO: Move this to a separate file
 
 def organize_clusters(points, labels):
     clusters_points = np.zeros(len(np.unique(labels)), dtype=object)
     for label in np.unique(labels):
-        #if label == -1:
-        #    continue
         cluster_points = np.asarray(points)[labels == label]
         clusters_points[int(label)] = cluster_points
     return clusters_points
@@ -39,8 +29,6 @@ def build_pointcloud_clusters(clusters_points, label_colors):
         pcd_cluster.points = o3d.utility.Vector3dVector(clusters_points[i])
         pcd_cluster.paint_uniform_color(label_colors[i])
         pcd_list[i] = pcd_cluster
-    #pcd_list[-1].paint_uniform_color([1, 0, 0])  # Outliers are red
-
     return pcd_list
 
 def build_pointcloud_obb(clusters_point_clouds):
@@ -52,7 +40,7 @@ def build_pointcloud_obb(clusters_point_clouds):
     return obb_list
 
 class PointCloudSubscriber(Node):
-    def __init__(self):
+    def __init__(self, recorder_filename=None):
         super().__init__('open3d_pc_viz')
         self.subscription = self.create_subscription(
             PointCloud2,
@@ -64,7 +52,15 @@ class PointCloudSubscriber(Node):
         self.pcd = o3d.geometry.PointCloud()
         self.vis.create_window()
         self.first_run = True
-        self.pc_performance_monitor = PCPerformanceMonitor()
+        
+        self.pc_performance_monitor = PerformanceMonitorErmis()
+        if recorder_filename is not None:
+            self.enable_recorder = True
+            self.pc_performance_recorder = PerformanceCSVRecorder(recorder_filename)
+        else:
+            self.enable_recorder = False
+            self.pc_performance_recorder = None
+
         self.label_colors = np.random.rand(1000, 3)
 
         # Initialize z-range parameters for passthrough filter
@@ -72,17 +68,11 @@ class PointCloudSubscriber(Node):
         self.z_max = 2.0
 
     def pointcloud_callback(self, msg):
-
-        #self.vis.clear_geometries()
-
         start = time.time()
 
         # Convert ROS PointCloud2 message to numpy array
         pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
         pc2_points_64 = pc2_points.astype(np.float64)
-
-        # takes about 6 ms extra
-        # pc2_points = np.array(list(pc2_points))        
 
         # Apply z passthrough filter and remove points with NaN or infinite values in one step
         valid_idx = (pc2_points_64[:, 2] >= self.z_min) & (pc2_points_64[:, 2] <= self.z_max) & ~np.isinf(pc2_points_64).any(axis=1)
@@ -113,10 +103,11 @@ class PointCloudSubscriber(Node):
         self.pc_performance_monitor.update(elapsed_time)
 
         # print current elapsed fps and mean elapsed fps
-
         print(f'FPS: {(1/elapsed_time):.2f} ; Elapsed time: {(elapsed_time*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f} ; Mean Elapsed time: {(self.pc_performance_monitor.get_mean()*1000):.2f}')
-
-        
+        if self.enable_recorder:
+            self.pc_performance_recorder.record(
+                elapsed_time, 1/elapsed_time, 
+                self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
 
         self.vis.clear_geometries()
 
@@ -132,10 +123,15 @@ class PointCloudSubscriber(Node):
         self.vis.poll_events()
         self.vis.update_renderer()
         
-
 def main(args=None):
     rclpy.init(args=args)
-    node = PointCloudSubscriber()
+
+    # Argument parsing
+    parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
+    parser.add_argument('filepath', nargs='?', default=None, help='Filepath for performance recording')
+    parsed_args = parser.parse_args(args=args)
+
+    node = PointCloudSubscriber(recorder_filename=parsed_args.filepath)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
