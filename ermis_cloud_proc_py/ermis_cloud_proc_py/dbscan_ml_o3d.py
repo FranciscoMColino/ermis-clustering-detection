@@ -64,7 +64,7 @@ class PointCloudSubscriber(Node):
         self.label_colors = np.random.rand(1000, 3)
 
         # Initialize z-range parameters for passthrough filter
-        self.z_min = -0.05
+        self.z_min = 0
         self.z_max = 2.0
 
     def pointcloud_callback(self, msg):
@@ -81,9 +81,13 @@ class PointCloudSubscriber(Node):
         # Update the point cloud
         self.pcd.points = o3d.utility.Vector3dVector(pc2_points_64)
 
-        self.pcd.voxel_down_sample(voxel_size=0.05)
+        pcd_down_samp = self.pcd.voxel_down_sample(voxel_size=0.05)
+        self.pcd.points = pcd_down_samp.points
 
-        points = pc2_points_64
+        pcd_res, indices = self.pcd.remove_statistical_outlier(nb_neighbors=10, std_ratio=0.025)
+        self.pcd.points = pcd_res.points
+
+        points = np.asarray(self.pcd.points)
 
         # DBSCAN clustering
         eps = 0.35
