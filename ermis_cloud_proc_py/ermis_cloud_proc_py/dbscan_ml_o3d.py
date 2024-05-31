@@ -43,6 +43,13 @@ def build_pointcloud_clusters(clusters_points, label_colors):
 
     return pcd_list
 
+def build_pointcloud_obb(clusters_point_clouds):
+    obb_list = np.zeros(len(clusters_point_clouds), dtype=object)
+    for i in range(len(clusters_point_clouds)):
+        obb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(clusters_point_clouds[i].points)
+        obb.color = [1, 0, 0]
+        obb_list[i] = obb
+    return obb_list
 
 class PointCloudSubscriber(Node):
     def __init__(self):
@@ -96,6 +103,10 @@ class PointCloudSubscriber(Node):
 
         clusters_points = organize_clusters(points, labels)
 
+        pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
+
+        obb_list = build_pointcloud_obb(pcd_list)
+
         end = time.time()
 
         elapsed_time = end - start
@@ -105,12 +116,13 @@ class PointCloudSubscriber(Node):
 
         print(f'FPS: {(1/elapsed_time):.2f} ; Elapsed time: {(elapsed_time*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f} ; Mean Elapsed time: {(self.pc_performance_monitor.get_mean()*1000):.2f}')
 
-        pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
+        
 
         self.vis.clear_geometries()
 
-        for pcd_cluster in pcd_list:
-            self.vis.add_geometry(pcd_cluster, reset_bounding_box=self.first_run)
+        for i in range(len(pcd_list)):
+            self.vis.add_geometry(pcd_list[i], reset_bounding_box=self.first_run)
+            self.vis.add_geometry(obb_list[i], reset_bounding_box=self.first_run)
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
 
         if self.first_run:
