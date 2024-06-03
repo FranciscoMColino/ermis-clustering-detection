@@ -1,19 +1,20 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
-import open3d as o3d
 import sensor_msgs_py.point_cloud2 as pc2
+
 import numpy as np
 import struct
 import time
 import argparse  # New import for argument parsing
 
+import open3d as o3d
+import mlpack
+import yaml
+
 from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
 from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecorder
 
-import mlpack
-
-# TODO: Move this to a separate file
 
 def organize_clusters(points, labels):
     clusters_points = np.zeros(len(np.unique(labels)), dtype=object)
@@ -47,8 +48,10 @@ def build_pointcloud_obb(clusters_point_clouds):
         obb_list[i] = obb
     return obb_list
 
+
+
 class PointCloudSubscriber(Node):
-    def __init__(self, recorder_filename=None):
+    def __init__(self, config_filename=None, recorder_filename=None):
         super().__init__('open3d_pc_viz')
         self.subscription = self.create_subscription(
             PointCloud2,
@@ -70,17 +73,37 @@ class PointCloudSubscriber(Node):
         else:
             self.enable_recorder = False
             self.pc_performance_recorder = None
+        
+        self.config_filename = config_filename
 
+        self.setup_processing_configs()
         self.first_run = True
 
         self.label_colors = np.random.rand(1000, 3)
 
-        # Initialize z-range parameters for passthrough filter
-        self.z_min = 0
-        self.z_max = 2.0
+    def setup_processing_configs(self):
+        if self.config_filename is not None:
+            with open(self.config_filename, 'r') as file:
+                data = yaml.safe_load(file)
 
-    
-    def setupViewControl(self):
+                if 'z_filter' in data:
+                    z_filter = data['z_filter']
+                    if 'z_min' in z_filter and 'z_max' in z_filter:
+                        print("All required fields are present.")
+                    else:
+                        print("Missing 'z_min' or 'z_max' in 'z_filter'.")
+                else:
+                    print("Missing 'z_filter' field.")
+                
+                
+
+                self.processing_configs = data
+        else:
+            print('No configuration file provided. Exiting...')
+            exit(1)
+        
+
+    def setup_view_control(self):
         view_control = self.vis.get_view_control()
         view_control.rotate(0, -525)
         view_control.rotate(self.width * 0.40, 0)
@@ -94,7 +117,9 @@ class PointCloudSubscriber(Node):
         pc2_points_64 = pc2_points.astype(np.float64)
 
         # Apply z passthrough filter and remove points with NaN or infinite values in one step
-        valid_idx = (pc2_points_64[:, 2] >= self.z_min) & (pc2_points_64[:, 2] <= self.z_max) & ~np.isinf(pc2_points_64).any(axis=1)
+        z_min = self.processing_configs['z_filter']['z_min']
+        z_max = self.processing_configs['z_filter']['z_max']
+        valid_idx = (pc2_points_64[:, 2] >= z_min) & (pc2_points_64[:, 2] <= z_max) & ~np.isinf(pc2_points_64).any(axis=1)
         pc2_points_64 = pc2_points_64[valid_idx]
 
         # Update the point cloud
@@ -135,7 +160,7 @@ class PointCloudSubscriber(Node):
         if self.first_run:
             self.vis.add_geometry(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pc2_points_64)))
             self.first_run = False
-            self.setupViewControl()
+            self.setup_view_control()
 
         self.vis.clear_geometries()
 
@@ -153,10 +178,11 @@ def main(args=None):
 
     # Argument parsing
     parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
-    parser.add_argument('filepath', nargs='?', default=None, help='Filepath for performance recording')
+    parser.add_argument('config_fp', type=str, help='Filepath for configuration file')
+    parser.add_argument('--record_fp', type=str, default=None, help='Filepath for performance recording')
     parsed_args = parser.parse_args(args=args)
 
-    node = PointCloudSubscriber(recorder_filename=parsed_args.filepath)
+    node = PointCloudSubscriber(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
