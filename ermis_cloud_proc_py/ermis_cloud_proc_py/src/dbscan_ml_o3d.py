@@ -15,6 +15,7 @@ import yaml
 from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
 from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecorder
 
+### START - Cluster organization and visualization
 
 def organize_clusters(points, labels):
     clusters_points = np.zeros(len(np.unique(labels)), dtype=object)
@@ -32,6 +33,40 @@ def build_pointcloud_clusters(clusters_points, label_colors):
         pcd_list[i] = pcd_cluster
     return pcd_list
 
+### END - Cluster organization and visualization
+
+### START - Raw point manipulation
+
+def load_pointcloud_from_ros2_msg(msg):
+    pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
+    pc2_points_64 = pc2_points.astype(np.float64)
+    return pc2_points_64
+
+def apply_finite_z_passthrough_filter(points, z_min, z_max):
+    valid_idx = (points[:, 2] >= z_min) & (points[:, 2] <= z_max) & ~np.isinf(points).any(axis=1)
+    return points[valid_idx]
+
+def apply_dbscan_clustering(points, eps=0.35, min_size=10):
+    d = mlpack.dbscan(input_=points, epsilon=eps, min_size=min_size)
+    labels = d['assignments']
+    return labels
+
+### END - Raw point manipulation
+
+### START - Open3D point cloud manipulation
+
+def apply_voxel_downsampling(pcd, voxel_size=0.05):
+    pcd_down_samp = pcd.voxel_down_sample(voxel_size=voxel_size)
+    return pcd_down_samp.points
+
+def apply_statistical_outlier_removal(pcd, nb_neighbors=10, std_ratio=0.025):
+    pcd_res, _ = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbors, std_ratio=std_ratio)
+    return pcd_res.points
+
+### END - Open3D point cloud manipulation
+
+### START - Bounding box generation
+
 def build_pointcloud_aabb(clusters_point_clouds):
     aabb_list = np.zeros(len(clusters_point_clouds), dtype=object)
     for i in range(len(clusters_point_clouds)):
@@ -48,7 +83,7 @@ def build_pointcloud_obb(clusters_point_clouds):
         obb_list[i] = obb
     return obb_list
 
-
+### END - Bounding box generation
 
 class PointCloudSubscriber(Node):
     def __init__(self, config_filename=None, recorder_filename=None):
@@ -94,8 +129,6 @@ class PointCloudSubscriber(Node):
                         print("Missing 'z_min' or 'z_max' in 'z_filter'.")
                 else:
                     print("Missing 'z_filter' field.")
-                
-                
 
                 self.processing_configs = data
         else:
@@ -112,37 +145,20 @@ class PointCloudSubscriber(Node):
     def pointcloud_callback(self, msg):
         start = time.time()
 
-        # Convert ROS PointCloud2 message to numpy array
-        pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
-        pc2_points_64 = pc2_points.astype(np.float64)
+        points = load_pointcloud_from_ros2_msg(msg)
+        points = apply_finite_z_passthrough_filter(points, self.processing_configs['z_filter']['z_min'], self.processing_configs['z_filter']['z_max'])
 
-        # Apply z passthrough filter and remove points with NaN or infinite values in one step
-        z_min = self.processing_configs['z_filter']['z_min']
-        z_max = self.processing_configs['z_filter']['z_max']
-        valid_idx = (pc2_points_64[:, 2] >= z_min) & (pc2_points_64[:, 2] <= z_max) & ~np.isinf(pc2_points_64).any(axis=1)
-        pc2_points_64 = pc2_points_64[valid_idx]
-
-        # Update the point cloud
-        self.pcd.points = o3d.utility.Vector3dVector(pc2_points_64)
-
-        pcd_down_samp = self.pcd.voxel_down_sample(voxel_size=0.05)
-        self.pcd.points = pcd_down_samp.points
-
-        pcd_res, indices = self.pcd.remove_statistical_outlier(nb_neighbors=10, std_ratio=0.025)
-        self.pcd.points = pcd_res.points
+        # Open3D point cloud processing
+        self.pcd.points = o3d.utility.Vector3dVector(points)
+        self.pcd.points = apply_voxel_downsampling(self.pcd, voxel_size=0.05)
+        self.pcd.points = apply_statistical_outlier_removal(self.pcd, nb_neighbors=10, std_ratio=0.025)
 
         points = np.asarray(self.pcd.points)
 
         # DBSCAN clustering
-        eps = 0.35
-        min_size = 10
-        d = mlpack.dbscan(input_=points, epsilon=eps, min_size=min_size)
-        labels = d['assignments']
-
+        labels = apply_dbscan_clustering(points, eps=0.35, min_size=10)
         clusters_points = organize_clusters(points, labels)
-
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
-
         bb_list = build_pointcloud_aabb(pcd_list)
 
         end = time.time()
@@ -158,7 +174,7 @@ class PointCloudSubscriber(Node):
                 self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
 
         if self.first_run:
-            self.vis.add_geometry(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pc2_points_64)))
+            self.vis.add_geometry(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points)))
             self.first_run = False
             self.setup_view_control()
 
