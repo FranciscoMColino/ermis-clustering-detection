@@ -6,8 +6,8 @@ voxel_downsample:
   voxel_size: 0.05
 
 statistical_outlier_removal:
-  nb_neighbors: 50
-  std_ratio: 1.0
+  nb_neighbors: 10
+  std_ratio: 0.025
 
 dbscan_clustering:
   eps: 0.35
