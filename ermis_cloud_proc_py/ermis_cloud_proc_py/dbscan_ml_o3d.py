@@ -50,7 +50,9 @@ class PointCloudSubscriber(Node):
         self.subscription  # prevent unused variable warning
         self.vis = o3d.visualization.Visualizer()
         self.pcd = o3d.geometry.PointCloud()
-        self.vis.create_window()
+        self.width = 1200
+        self.height = 800
+        self.vis.create_window(window_name='Open3D Point Cloud Visualizer', width=self.width, height=self.height)
         self.first_run = True
         
         self.pc_performance_monitor = PerformanceMonitorErmis()
@@ -66,6 +68,13 @@ class PointCloudSubscriber(Node):
         # Initialize z-range parameters for passthrough filter
         self.z_min = 0
         self.z_max = 2.0
+
+    
+    def setupViewControl(self):
+        view_control = self.vis.get_view_control()
+        view_control.rotate(0, -525)
+        view_control.rotate(self.width * 0.40, 0)
+        self.vis.get_render_option().point_size = 2.0
 
     def pointcloud_callback(self, msg):
         start = time.time()
@@ -112,6 +121,11 @@ class PointCloudSubscriber(Node):
             self.pc_performance_recorder.record(
                 elapsed_time, 1/elapsed_time, 
                 self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
+
+        if self.first_run:
+            self.vis.add_geometry(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(pc2_points_64)))
+            self.first_run = False
+            self.setupViewControl()
 
         self.vis.clear_geometries()
 
