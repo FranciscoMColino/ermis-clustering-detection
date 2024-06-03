@@ -145,20 +145,24 @@ class PointCloudSubscriber(Node):
     def pointcloud_callback(self, msg):
         start = time.time()
 
+        # Raw point cloud pre-processing
         points = load_pointcloud_from_ros2_msg(msg)
         points = apply_finite_z_passthrough_filter(points, self.processing_configs['z_filter']['z_min'], self.processing_configs['z_filter']['z_max'])
 
-        # Open3D point cloud processing
+        # Open3D point cloud pre-processing
         self.pcd.points = o3d.utility.Vector3dVector(points)
         self.pcd.points = apply_voxel_downsampling(self.pcd, voxel_size=0.05)
         self.pcd.points = apply_statistical_outlier_removal(self.pcd, nb_neighbors=10, std_ratio=0.025)
 
-        points = np.asarray(self.pcd.points)
-
         # DBSCAN clustering
+        points = np.asarray(self.pcd.points)
         labels = apply_dbscan_clustering(points, eps=0.35, min_size=10)
+
+        # Organize clusters and build point clouds
         clusters_points = organize_clusters(points, labels)
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
+
+        # Build bounding boxes
         bb_list = build_pointcloud_aabb(pcd_list)
 
         end = time.time()
