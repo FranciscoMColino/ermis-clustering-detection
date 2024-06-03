@@ -85,6 +85,30 @@ def build_pointcloud_obb(clusters_point_clouds):
 
 ### END - Bounding box generation
 
+# Structs for point cloud processing configurations
+class ZFilterConfig:
+    def __init__(self, z_min=0.0, z_max=2.0):
+        self.z_min = z_min
+        self.z_max = z_max
+
+class VoxelDownsampleConfig:
+    def __init__(self, voxel_size=0.35):
+        self.voxel_size = voxel_size
+
+class StatisticalOutlierRemovalConfig:
+    def __init__(self, nb_neighbors=50, std_ratio=1.0):
+        self.nb_neighbors = nb_neighbors
+        self.std_ratio = std_ratio
+    
+class DBSCANClusteringConfig:
+    def __init__(self, eps=0.35, min_samples=10):
+        self.eps = eps
+        self.min_samples = min_samples
+
+class BoundingBoxConfig:
+    def __init__(self, bounding_box_type="OBB"):
+        self.bounding_box_type = bounding_box_type
+
 class PointCloudSubscriber(Node):
     def __init__(self, config_filename=None, recorder_filename=None):
         super().__init__('open3d_pc_viz')
@@ -121,16 +145,33 @@ class PointCloudSubscriber(Node):
             with open(self.config_filename, 'r') as file:
                 data = yaml.safe_load(file)
 
-                if 'z_filter' in data:
-                    z_filter = data['z_filter']
-                    if 'z_min' in z_filter and 'z_max' in z_filter:
-                        print("All required fields are present.")
-                    else:
-                        print("Missing 'z_min' or 'z_max' in 'z_filter'.")
-                else:
-                    print("Missing 'z_filter' field.")
+                """ Example configuration file:
+                z_filter:
+                    z_min: 0.0
+                    z_max: 2.0
 
-                self.processing_configs = data
+                voxel_downsample:
+                    voxel_size: 0.05
+
+                statistical_outlier_removal:
+                    nb_neighbors: 50
+                    std_ratio: 1.0
+
+                dbscan_clustering:
+                    eps: 0.35
+                    min_samples: 10
+
+                bounding_box_type: "OBB" # "AABB" or "OBB"
+                """
+                try:
+                    self.z_filter_config = ZFilterConfig(z_min=data['z_filter']['z_min'], z_max=data['z_filter']['z_max'])
+                    self.voxel_downsample_config = VoxelDownsampleConfig(voxel_size=data['voxel_downsample']['voxel_size'])
+                    self.statistical_outlier_removal_config = StatisticalOutlierRemovalConfig(nb_neighbors=data['statistical_outlier_removal']['nb_neighbors'], std_ratio=data['statistical_outlier_removal']['std_ratio'])
+                    self.dbscan_clustering_config = DBSCANClusteringConfig(eps=data['dbscan_clustering']['eps'], min_samples=data['dbscan_clustering']['min_samples'])
+                    self.bounding_box_config = BoundingBoxConfig(bounding_box_type=data['bounding_box_type'])
+                except KeyError as e:
+                    print(f'Error: Configuration file is missing key: {e}')
+                    exit(1)
         else:
             print('No configuration file provided. Exiting...')
             exit(1)
@@ -147,23 +188,36 @@ class PointCloudSubscriber(Node):
 
         # Raw point cloud pre-processing
         points = load_pointcloud_from_ros2_msg(msg)
-        points = apply_finite_z_passthrough_filter(points, self.processing_configs['z_filter']['z_min'], self.processing_configs['z_filter']['z_max'])
-
+        points = apply_finite_z_passthrough_filter(points, 
+                                                    z_min=self.z_filter_config.z_min, 
+                                                    z_max=self.z_filter_config.z_max)
+        
         # Open3D point cloud pre-processing
         self.pcd.points = o3d.utility.Vector3dVector(points)
-        self.pcd.points = apply_voxel_downsampling(self.pcd, voxel_size=0.05)
-        self.pcd.points = apply_statistical_outlier_removal(self.pcd, nb_neighbors=10, std_ratio=0.025)
+        self.pcd.points = apply_voxel_downsampling(self.pcd, 
+                                                   voxel_size=self.voxel_downsample_config.voxel_size)
+        self.pcd.points = apply_statistical_outlier_removal(self.pcd, 
+                                                            nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors, 
+                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio)
 
         # DBSCAN clustering
         points = np.asarray(self.pcd.points)
-        labels = apply_dbscan_clustering(points, eps=0.35, min_size=10)
+        labels = apply_dbscan_clustering(points, 
+                                         eps=self.dbscan_clustering_config.eps,
+                                         min_size=self.dbscan_clustering_config.min_samples)
 
         # Organize clusters and build point clouds
         clusters_points = organize_clusters(points, labels)
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
 
         # Build bounding boxes
-        bb_list = build_pointcloud_aabb(pcd_list)
+        if self.bounding_box_config.bounding_box_type == "AABB":
+            bb_list = build_pointcloud_aabb(pcd_list)
+        elif self.bounding_box_config.bounding_box_type == "OBB":
+            bb_list = build_pointcloud_obb(pcd_list)
+        else:
+            print('Invalid bounding box type. Exiting...')
+            exit(1)
 
         end = time.time()
 

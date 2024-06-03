@@ -1,3 +1,16 @@
 z_filter:
   z_min: 0.0
   z_max: 2.0
+
+voxel_downsample:
+  voxel_size: 0.05
+
+statistical_outlier_removal:
+  nb_neighbors: 50
+  std_ratio: 1.0
+
+dbscan_clustering:
+  eps: 0.35
+  min_samples: 10
+
+bounding_box_type: "AABB" # "AABB" or "OBB"
