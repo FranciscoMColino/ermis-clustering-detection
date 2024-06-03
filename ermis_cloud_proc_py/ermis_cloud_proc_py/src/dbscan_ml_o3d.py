@@ -8,8 +8,8 @@ import struct
 import time
 import argparse  # New import for argument parsing
 
-from ermis_cloud_proc_py.utils.perf_monitor import PerformanceMonitorErmis
-from ermis_cloud_proc_py.utils.perf_csv_recorder import PerformanceCSVRecorder
+from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecorder
 
 import mlpack
 
@@ -47,13 +47,13 @@ class PointCloudSubscriber(Node):
             '/zed/zed_node/point_cloud/cloud_registered',
             self.pointcloud_callback,
             10)
+
         self.subscription  # prevent unused variable warning
-        self.vis = o3d.visualization.Visualizer()
-        self.pcd = o3d.geometry.PointCloud()
         self.width = 1200
         self.height = 800
-        self.vis.create_window(window_name='Open3D Point Cloud Visualizer', width=self.width, height=self.height)
-        self.first_run = True
+        self.vis = o3d.visualization.Visualizer()
+        self.pcd = o3d.geometry.PointCloud()
+        self.vis.create_window(window_name='Open3D Point Cloud Visualizer', width=self.width, height=self.height) 
         
         self.pc_performance_monitor = PerformanceMonitorErmis()
         if recorder_filename is not None:
@@ -62,6 +62,8 @@ class PointCloudSubscriber(Node):
         else:
             self.enable_recorder = False
             self.pc_performance_recorder = None
+
+        self.first_run = True
 
         self.label_colors = np.random.rand(1000, 3)
 
