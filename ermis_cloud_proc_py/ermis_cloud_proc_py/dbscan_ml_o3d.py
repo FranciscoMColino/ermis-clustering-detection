@@ -31,13 +31,13 @@ def build_pointcloud_clusters(clusters_points, label_colors):
         pcd_list[i] = pcd_cluster
     return pcd_list
 
-def build_pointcloud_obb(clusters_point_clouds):
-    obb_list = np.zeros(len(clusters_point_clouds), dtype=object)
+def build_pointcloud_aabb(clusters_point_clouds):
+    aabb_list = np.zeros(len(clusters_point_clouds), dtype=object)
     for i in range(len(clusters_point_clouds)):
-        obb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(clusters_point_clouds[i].points)
-        obb.color = [1, 0, 0]
-        obb_list[i] = obb
-    return obb_list
+        aabb = o3d.geometry.AxisAlignedBoundingBox.create_from_points(clusters_point_clouds[i].points)
+        aabb.color = [1, 0, 0]
+        aabb_list[i] = aabb
+    return aabb_list
 
 class PointCloudSubscriber(Node):
     def __init__(self, recorder_filename=None):
@@ -99,7 +99,7 @@ class PointCloudSubscriber(Node):
 
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
 
-        obb_list = build_pointcloud_obb(pcd_list)
+        obb_list = build_pointcloud_aabb(pcd_list)
 
         end = time.time()
 
@@ -119,9 +119,6 @@ class PointCloudSubscriber(Node):
             self.vis.add_geometry(pcd_list[i], reset_bounding_box=self.first_run)
             self.vis.add_geometry(obb_list[i], reset_bounding_box=self.first_run)
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
-
-        if self.first_run:
-            self.first_run = False
 
         # Clear and update the visualizer
         self.vis.poll_events()
