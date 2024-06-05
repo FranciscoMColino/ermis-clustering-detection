@@ -30,6 +30,7 @@ setup(
             'open3d_passthrough_viz = ermis_cloud_proc_py.src.open3d_passthrough_viz:main',
             'kmeans_dbscan_ml_o3d = ermis_cloud_proc_py.src.kmeans_dbscan_ml_o3d:main',
             'open3d_ground_segment = ermis_cloud_proc_py.src.open3d_ground_segment:main',
+            'cluster_bbox_pub = ermis_cloud_proc_py.src.cluster_bbox_pub:main',
         ],
     },
 )
