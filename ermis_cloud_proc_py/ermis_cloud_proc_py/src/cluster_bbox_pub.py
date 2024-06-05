@@ -1,6 +1,9 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
+from std_msgs.msg import Header, String, UInt32
+from geometry_msgs.msg import Point
+from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D
 import sensor_msgs_py.point_cloud2 as pc2
 
 import numpy as np
@@ -109,13 +112,17 @@ class BoundingBoxConfig:
     def __init__(self, bounding_box_type="OBB"):
         self.bounding_box_type = bounding_box_type
 
-class PointCloudSubscriber(Node):
+class ClusterBboxDetectionPublisher(Node):
     def __init__(self, config_filename=None, recorder_filename=None):
-        super().__init__('open3d_pc_viz')
+        super().__init__('cluster_bbox_detection_publisher')
         self.subscription = self.create_subscription(
             PointCloud2,
             '/zed/zed_node/point_cloud/cloud_registered',
             self.pointcloud_callback,
+            10)
+        self.cluster_bbox_pub = self.create_publisher(
+            EmberClusterArray, 
+            '/ember_detection/ember_cluster_array', 
             10)
 
         self.subscription  # prevent unused variable warning
@@ -144,25 +151,6 @@ class PointCloudSubscriber(Node):
         if self.config_filename is not None:
             with open(self.config_filename, 'r') as file:
                 data = yaml.safe_load(file)
-
-                """ Example configuration file:
-                z_filter:
-                    z_min: 0.0
-                    z_max: 2.0
-
-                voxel_downsample:
-                    voxel_size: 0.05
-
-                statistical_outlier_removal:
-                    nb_neighbors: 50
-                    std_ratio: 1.0
-
-                dbscan_clustering:
-                    eps: 0.35
-                    min_samples: 10
-
-                bounding_box_type: "OBB" # "AABB" or "OBB"
-                """
                 try:
                     self.z_filter_config = ZFilterConfig(z_min=data['z_filter']['z_min'], z_max=data['z_filter']['z_max'])
                     self.voxel_downsample_config = VoxelDownsampleConfig(voxel_size=data['voxel_downsample']['voxel_size'])
@@ -219,7 +207,37 @@ class PointCloudSubscriber(Node):
             print('Invalid bounding box type. Exiting...')
             exit(1)
 
+        if len(pcd_list) != len(bb_list):
+            print('Error: Number of point clouds and bounding boxes do not match. Exiting...')
+            exit(1)
+
         end = time.time()
+
+        ### transform to ROS2 message
+
+        ember_cluster_array = EmberClusterArray()
+        ember_cluster_array.header = msg.header
+        ember_cluster_array.header.frame_id = 'cluster_bbox_detection'
+
+        for i in range(len(pcd_list)):
+            ember_cluster = EmberCluster()
+            cluster_points = np.asarray(pcd_list[i].points)
+            cluster_pc2 = pc2.create_cloud_xyz32(ember_cluster_array.header, cluster_points)
+            ember_cluster.point_cloud = cluster_pc2
+
+            ember_bbox = EmberBoundingBox3D()
+            ember_bbox.det_label = String(data='default')
+            bbox_points = np.asarray(bb_list[i].get_box_points())
+            for point in bbox_points:
+                ember_bbox.points.append(Point(x=point[0], y=point[1], z=point[2]))
+            ember_bbox.points_count = UInt32(data=len(bbox_points))
+
+            ember_cluster.bounding_box = ember_bbox
+            ember_cluster_array.clusters.append(ember_cluster)
+
+        self.cluster_bbox_pub.publish(ember_cluster_array)
+
+        ###
 
         elapsed_time = end - start
         self.pc_performance_monitor.update(elapsed_time)
@@ -256,7 +274,7 @@ def main(args=None):
     parser.add_argument('--record_fp', type=str, default=None, help='Filepath for performance recording')
     parsed_args = parser.parse_args(args=args)
 
-    node = PointCloudSubscriber(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp)
+    node = ClusterBboxDetectionPublisher(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
