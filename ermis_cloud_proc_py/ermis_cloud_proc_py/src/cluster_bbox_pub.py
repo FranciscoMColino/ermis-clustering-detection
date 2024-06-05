@@ -141,10 +141,8 @@ class ClusterBboxDetectionPublisher(Node):
             self.pc_performance_recorder = None
         
         self.config_filename = config_filename
-
         self.setup_processing_configs()
-        self.first_run = True
-
+        self.setup_view_control()
         self.label_colors = np.random.rand(1000, 3)
 
     def setup_processing_configs(self):
@@ -164,12 +162,33 @@ class ClusterBboxDetectionPublisher(Node):
             print('No configuration file provided. Exiting...')
             exit(1)
         
-
     def setup_view_control(self):
+        # Add 8 points to initiate the visualizer's bounding box
+        points = np.array([
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0],
+            [0, 1, 1],
+            [10, 0, 0],
+            [10, 0, 1],
+            [10, 1, 0],
+            [10, 1, 1]
+        ])
+
+        points *= 4
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        self.vis.add_geometry(pcd, reset_bounding_box=True)
+
         view_control = self.vis.get_view_control()
         view_control.rotate(0, -525)
-        view_control.rotate(self.width * 0.40, 0)
+        view_control.rotate(500, 0)
+
+        # points thinner and lines thicker
         self.vis.get_render_option().point_size = 2.0
+        self.vis.get_render_option().line_width = 10.0
 
     def pointcloud_callback(self, msg):
         start = time.time()
@@ -249,16 +268,11 @@ class ClusterBboxDetectionPublisher(Node):
                 elapsed_time, 1/elapsed_time, 
                 self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
 
-        if self.first_run:
-            self.vis.add_geometry(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points)))
-            self.first_run = False
-            self.setup_view_control()
-
         self.vis.clear_geometries()
 
         for i in range(len(pcd_list)):
-            self.vis.add_geometry(pcd_list[i], reset_bounding_box=self.first_run)
-            self.vis.add_geometry(bb_list[i], reset_bounding_box=self.first_run)
+            self.vis.add_geometry(pcd_list[i], reset_bounding_box=False)
+            self.vis.add_geometry(bb_list[i], reset_bounding_box=False)
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
 
         # Clear and update the visualizer
