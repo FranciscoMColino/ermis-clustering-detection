@@ -1,13 +1,13 @@
 z_filter:
-  z_min: 0.0
+  z_min: -0.05
   z_max: 2.0
 
 voxel_downsample:
-  voxel_size: 0.05
+  voxel_size: 0.02
 
 statistical_outlier_removal:
-  nb_neighbors: 10
-  std_ratio: 0.025
+  nb_neighbors: 5
+  std_ratio: 0.01
 
 dbscan_clustering:
   eps: 0.35
