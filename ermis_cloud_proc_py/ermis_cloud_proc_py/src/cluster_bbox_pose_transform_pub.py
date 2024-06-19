@@ -22,8 +22,11 @@ from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecord
 ### START - Cluster organization and visualization
 
 def organize_clusters(points, labels):
-    clusters_points = np.zeros(len(np.unique(labels)), dtype=object)
+    # DOn't add in the -1 cluster (noise)
+    clusters_points = np.zeros(len(np.unique(labels))-1, dtype=object)
     for label in np.unique(labels):
+        if label == -1:
+            continue
         cluster_points = np.asarray(points)[labels == label]
         clusters_points[int(label)] = cluster_points
     return clusters_points
