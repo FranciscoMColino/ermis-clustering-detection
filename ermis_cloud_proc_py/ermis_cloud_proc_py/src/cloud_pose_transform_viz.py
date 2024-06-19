@@ -36,6 +36,15 @@ def apply_statistical_outlier_removal(pcd, nb_neighbors=10, std_ratio=0.025):
 
 ### END - Open3D point cloud manipulation
 
+def quaternion_to_rotation_matrix(q):
+    """
+    Convert a quaternion to a 3x3 rotation matrix.
+    """
+    x, y, z, w = q
+    R = np.array([[1 - 2*(y**2 + z**2), 2*(x*y - z*w), 2*(x*z + y*w)],
+                  [2*(x*y + z*w), 1 - 2*(x**2 + z**2), 2*(y*z - x*w)],
+                  [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]])
+    return R
 
 class CloudPoseTransformNode(Node):
     def __init__(self):
@@ -117,15 +126,31 @@ class CloudPoseTransformNode(Node):
 
         self.pcd.points = o3d.utility.Vector3dVector(points)
 
-        if self.current_pose is not None:
-            pose = self.current_pose
-            self.pcd.transform(np.array([
-                [pose.pose.orientation.w, -pose.pose.orientation.z, pose.pose.orientation.y, pose.pose.position.x],
-                [pose.pose.orientation.z, pose.pose.orientation.w, -pose.pose.orientation.x, pose.pose.position.y],
-                [-pose.pose.orientation.y, pose.pose.orientation.x, pose.pose.orientation.w, pose.pose.position.z],
-                [0, 0, 0, 1]
-            ]))
+        #if self.current_pose is not None:
+        #    pose = self.current_pose
+        #    self.pcd.transform(np.array([
+        #        [pose.pose.orientation.w, -pose.pose.orientation.z, pose.pose.orientation.y, pose.pose.position.x],
+        #        [pose.pose.orientation.z, pose.pose.orientation.w, -pose.pose.orientation.x, pose.pose.position.y],
+        #        [-pose.pose.orientation.y, pose.pose.orientation.x, pose.pose.orientation.w, pose.pose.position.z],
+        #        [0, 0, 0, 1]
+        #    ]))
         
+        if self.current_pose is not None:
+            pose = self.current_pose.pose
+            translation = np.array([pose.position.x,
+                                    pose.position.y,
+                                    pose.position.z])
+            quaternion = [pose.orientation.x,
+                        pose.orientation.y,
+                        pose.orientation.z,
+                        pose.orientation.w]
+            rotation_matrix = quaternion_to_rotation_matrix(quaternion)
+            transformation_matrix = np.eye(4)
+            transformation_matrix[:3, :3] = rotation_matrix
+            transformation_matrix[:3, 3] = translation
+            self.pcd.transform(transformation_matrix)
+
+
         end = time.time()
 
         elapsed_time = end - start
