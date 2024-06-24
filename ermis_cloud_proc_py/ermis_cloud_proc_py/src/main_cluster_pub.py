@@ -286,6 +286,7 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             cluster_points = np.asarray(pcd_list[i].points)
             cluster_pc2 = pc2.create_cloud_xyz32(ember_cluster_array.header, cluster_points)
             ember_cluster.point_cloud = cluster_pc2
+            ember_cluster.centroid = Point(x=centroids[i][0], y=centroids[i][1], z=centroids[i][2])
 
             ember_bbox = EmberBoundingBox3D()
             ember_bbox.det_label = String(data='default')
