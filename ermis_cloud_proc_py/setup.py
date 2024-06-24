@@ -33,6 +33,7 @@ setup(
             'cluster_bbox_pub = ermis_cloud_proc_py.src.cluster_bbox_pub:main',
             'cloud_pose_transform_viz = ermis_cloud_proc_py.src.cloud_pose_transform_viz:main',
             'cluster_bbox_pose_transform_pub = ermis_cloud_proc_py.src.cluster_bbox_pose_transform_pub:main',
+            'main_cluster_pub = ermis_cloud_proc_py.src.main_cluster_pub:main',
         ],
     },
 )
