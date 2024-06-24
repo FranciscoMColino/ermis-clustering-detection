@@ -260,6 +260,14 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         clusters_points = organize_clusters(points, labels)
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
 
+        # apply statistical outlier removal to each cluster before building bounding boxes
+        # TODO maybe have a different configuration for this
+        for pcd in pcd_list:
+            # noise removal
+            pcd.points = apply_statistical_outlier_removal(pcd, 
+                                                            nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors, 
+                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio) 
+
         # Build bounding boxes
         if self.bounding_box_config.bounding_box_type == "AABB":
             bb_list = build_pointcloud_aabb(pcd_list)
