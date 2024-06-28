@@ -18,91 +18,8 @@ import yaml
 
 from ermis_cloud_proc_py.performance_tools.perf_monitor import PerformanceMonitorErmis
 from ermis_cloud_proc_py.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
-
-### START - Cluster organization and visualization
-
-def organize_clusters(points, labels):
-    # DOn't add in the -1 cluster (noise)
-    uniq_labels = np.unique(labels)
-    uniq_labels = uniq_labels[uniq_labels != -1]
-    clusters_points = np.zeros(len(uniq_labels), dtype=object)
-    for label in uniq_labels:
-        cluster_points = np.asarray(points)[labels == label]
-        clusters_points[int(label)] = cluster_points
-    return clusters_points
-
-def build_pointcloud_clusters(clusters_points, label_colors):
-    pcd_list = np.zeros(len(clusters_points), dtype=object)
-    for i in range(len(clusters_points)):
-        pcd_cluster = o3d.geometry.PointCloud()
-        pcd_cluster.points = o3d.utility.Vector3dVector(clusters_points[i])
-        pcd_cluster.paint_uniform_color(label_colors[i])
-        pcd_list[i] = pcd_cluster
-    return pcd_list
-
-### END - Cluster organization and visualization
-
-### START - Raw point manipulation
-
-def load_pointcloud_from_ros2_msg(msg):
-    pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
-    pc2_points_64 = pc2_points.astype(np.float64)
-    return pc2_points_64
-
-def apply_finite_z_passthrough_filter(points, z_min, z_max):
-    valid_idx = (points[:, 2] >= z_min) & (points[:, 2] <= z_max) & ~np.isinf(points).any(axis=1)
-    return points[valid_idx]
-
-def apply_dbscan_clustering(points, eps=0.35, min_size=10):
-    d = mlpack.dbscan(input_=points, epsilon=eps, min_size=min_size)
-    labels = d['assignments']
-    centroids = d['centroids']
-    return labels, centroids
-
-### END - Raw point manipulation
-
-### START - Open3D point cloud manipulation
-
-def apply_voxel_downsampling(pcd, voxel_size=0.05):
-    pcd_down_samp = pcd.voxel_down_sample(voxel_size=voxel_size)
-    return pcd_down_samp.points
-
-def apply_statistical_outlier_removal(pcd, nb_neighbors=10, std_ratio=0.025):
-    pcd_res, _ = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbors, std_ratio=std_ratio)
-    return pcd_res.points
-
-### END - Open3D point cloud manipulation
-
-### START - Bounding box generation
-
-def build_pointcloud_aabb(clusters_point_clouds):
-    aabb_list = np.zeros(len(clusters_point_clouds), dtype=object)
-    for i in range(len(clusters_point_clouds)):
-        aabb = clusters_point_clouds[i].get_axis_aligned_bounding_box()
-        aabb.color = [1, 0, 0]
-        aabb_list[i] = aabb
-    return aabb_list
-
-def build_pointcloud_obb(clusters_point_clouds):
-    obb_list = np.zeros(len(clusters_point_clouds), dtype=object)
-    for i in range(len(clusters_point_clouds)):
-        obb = clusters_point_clouds[i].get_oriented_bounding_box()
-        obb.color = [0, 1, 0]
-        obb_list[i] = obb
-    return obb_list
-
-### END - Bounding box generation
-
-# TODO move this a utils module?, and the matrix conversion
-def quaternion_to_rotation_matrix(q):
-    """
-    Convert a quaternion to a 3x3 rotation matrix.
-    """
-    x, y, z, w = q
-    R = np.array([[1 - 2*(y**2 + z**2), 2*(x*y - z*w), 2*(x*z + y*w)],
-                  [2*(x*y + z*w), 1 - 2*(x**2 + z**2), 2*(y*z - x*w)],
-                  [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]])
-    return R
+from ermis_cloud_proc_py.utils import *
+from ermis_cloud_proc_py.visualization.o3d_detect_viz import Open3DClusteringVisualizer
 
 # Structs for point cloud processing configurations
 class ZFilterConfig:
@@ -150,11 +67,9 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.pose_subscription  # prevent unused variable warning
         self.current_pose = None
 
-        self.width = 1200
-        self.height = 800
-        self.vis = o3d.visualization.Visualizer()
+        self.visualizer = Open3DClusteringVisualizer()
+
         self.pcd = o3d.geometry.PointCloud()
-        self.vis.create_window(window_name='Open3D Point Cloud Visualizer', width=self.width, height=self.height) 
         
         self.pc_performance_monitor = PerformanceMonitorErmis()
         if recorder_filename is not None:
@@ -164,14 +79,12 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             self.enable_recorder = False
             self.pc_performance_recorder = None
         
-        self.config_filename = config_filename
-        self.setup_processing_configs()
-        self.setup_view_control()
+        self.load_config(config_filename)
         self.label_colors = np.random.rand(1000, 3)
 
-    def setup_processing_configs(self):
-        if self.config_filename is not None:
-            with open(self.config_filename, 'r') as file:
+    def load_config(self, config_filename):
+        if config_filename is not None:
+            with open(config_filename, 'r') as file:
                 data = yaml.safe_load(file)
                 try:
                     self.z_filter_config = ZFilterConfig(z_min=data['z_filter']['z_min'], z_max=data['z_filter']['z_max'])
@@ -184,35 +97,10 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                     exit(1)
         else:
             print('No configuration file provided. Exiting...')
+            # Clear and update the visualizer
+            self.vis.poll_events()
+            self.vis.update_renderer()
             exit(1)
-        
-    def setup_view_control(self):
-        # Add 8 points to initiate the visualizer's bounding box
-        points = np.array([
-            [0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 1, 1],
-            [10, 0, 0],
-            [10, 0, 1],
-            [10, 1, 0],
-            [10, 1, 1]
-        ])
-
-        points *= 4
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-
-        self.vis.add_geometry(pcd, reset_bounding_box=True)
-
-        view_control = self.vis.get_view_control()
-        view_control.rotate(0, -525)
-        view_control.rotate(500, 0)
-
-        # points thinner and lines thicker
-        self.vis.get_render_option().point_size = 2.0
-        self.vis.get_render_option().line_width = 10.0
 
     def pose_callback(self, msg):
         self.current_pose = msg
@@ -230,20 +118,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.pcd.points = o3d.utility.Vector3dVector(points)
 
         if self.current_pose is not None:
-            pose = self.current_pose.pose
-            translation = np.array([pose.position.x,
-                                    pose.position.y,
-                                    pose.position.z])
-            quaternion = [pose.orientation.x,
-                        pose.orientation.y,
-                        pose.orientation.z,
-                        pose.orientation.w]
-            rotation_matrix = quaternion_to_rotation_matrix(quaternion)
-            transformation_matrix = np.eye(4)
-            transformation_matrix[:3, :3] = rotation_matrix
-            transformation_matrix[:3, 3] = translation
+            transformation_matrix = pose_msg_to_transform_matrix(self.current_pose)
             self.pcd.transform(transformation_matrix)
-
         
         self.pcd.points = apply_voxel_downsampling(self.pcd, 
                                                    voxel_size=self.voxel_downsample_config.voxel_size)
@@ -321,22 +197,11 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                 elapsed_time, 1/elapsed_time, 
                 self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
 
-        self.vis.clear_geometries()
-
-        for i in range(len(pcd_list)):
-            self.vis.add_geometry(pcd_list[i], reset_bounding_box=False)
-            self.vis.add_geometry(bb_list[i], reset_bounding_box=False)
-        self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
-
-        for i in range(len(centroids)):
-            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.05)
-            sphere.translate(centroids[i])
-            sphere.paint_uniform_color([0.7, 0, 1])
-            self.vis.add_geometry(sphere, reset_bounding_box=False)
-
-        # Clear and update the visualizer
-        self.vis.poll_events()
-        self.vis.update_renderer()
+        self.visualizer.reset()
+        self.visualizer.draw_clusters(pcd_list)
+        self.visualizer.draw_bboxes(bb_list)
+        self.visualizer.draw_centroids(centroids)
+        self.visualizer.render()
         
 def main(args=None):
     rclpy.init(args=args)
