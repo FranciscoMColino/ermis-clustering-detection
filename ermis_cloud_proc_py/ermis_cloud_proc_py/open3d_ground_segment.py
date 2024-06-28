@@ -53,9 +53,9 @@ def plane_segmentation_with_axis(input_cloud, distance_threshold=0.05, ransac_n=
 
     return inlier_cloud, outlier_cloud, best_plane_model
 
-class PointCloudSubscriber(Node):
+class ClusteringGroundSegment(Node):
     def __init__(self):
-        super().__init__('open3d_pc_viz')
+        super().__init__('clustering_ground_segment')
         self.subscription = self.create_subscription(
             PointCloud2,
             '/zed/zed_node/point_cloud/cloud_registered',
@@ -125,7 +125,7 @@ class PointCloudSubscriber(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PointCloudSubscriber()
+    node = ClusteringGroundSegment()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

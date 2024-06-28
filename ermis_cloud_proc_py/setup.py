@@ -24,15 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'open3d_pc_viz = ermis_cloud_proc_py.open3d_pc_viz:main',
-            'open3d_nocolor_pc_viz = ermis_cloud_proc_py.open3d_nocolor_pc_viz:main',
-            'dbscan_ml_o3d = ermis_cloud_proc_py.dbscan_ml_o3d:main',
-            'open3d_passthrough_viz = ermis_cloud_proc_py.open3d_passthrough_viz:main',
             'kmeans_dbscan_ml_o3d = ermis_cloud_proc_py.kmeans_dbscan_ml_o3d:main',
             'open3d_ground_segment = ermis_cloud_proc_py.open3d_ground_segment:main',
-            'cluster_bbox_pub = ermis_cloud_proc_py.cluster_bbox_pub:main',
-            'cloud_pose_transform_viz = ermis_cloud_proc_py.cloud_pose_transform_viz:main',
-            'cluster_bbox_pose_transform_pub = ermis_cloud_proc_py.cluster_bbox_pose_transform_pub:main',
             'main_cluster_pub = ermis_cloud_proc_py.main_cluster_pub:main',
         ],
     },

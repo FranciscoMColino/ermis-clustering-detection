@@ -45,9 +45,9 @@ def build_pointcloud_clusters(clusters_points, label_colors):
     return pcd_list
 
 
-class PointCloudSubscriber(Node):
+class KmDbscanClustering(Node):
     def __init__(self):
-        super().__init__('open3d_pc_viz')
+        super().__init__('kmeans_dbscan_ml_o3d')
         self.subscription = self.create_subscription(
             PointCloud2,
             '/zed/zed_node/point_cloud/cloud_registered',
@@ -163,7 +163,7 @@ class PointCloudSubscriber(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PointCloudSubscriber()
+    node = KmDbscanClustering()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
