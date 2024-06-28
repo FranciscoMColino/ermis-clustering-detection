@@ -42,7 +42,7 @@ class DBSCANClusteringConfig:
         self.min_samples = min_samples
 
 class BoundingBoxConfig:
-    def __init__(self, bounding_box_type="OBB"):
+    def __init__(self, bounding_box_type="AABB"): # TODO instead of string use a class with enum
         self.bounding_box_type = bounding_box_type
 
 class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
@@ -161,30 +161,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         end = time.time()
 
         ### transform to ROS2 message
-
-        ember_cluster_array = EmberClusterArray()
-        ember_cluster_array.header = msg.header
-        ember_cluster_array.header.frame_id = 'cluster_bbox_detection'
-
-        for i in range(len(pcd_list)):
-            ember_cluster = EmberCluster()
-            cluster_points = np.asarray(pcd_list[i].points)
-            cluster_pc2 = pc2.create_cloud_xyz32(ember_cluster_array.header, cluster_points)
-            ember_cluster.point_cloud = cluster_pc2
-            ember_cluster.centroid = Point(x=centroids[i][0], y=centroids[i][1], z=centroids[i][2])
-
-            ember_bbox = EmberBoundingBox3D()
-            ember_bbox.det_label = String(data='default')
-            bbox_points = np.asarray(bb_list[i].get_box_points())
-            for point in bbox_points:
-                ember_bbox.points.append(Point(x=point[0], y=point[1], z=point[2]))
-            ember_bbox.points_count = UInt32(data=len(bbox_points))
-
-            ember_cluster.bounding_box = ember_bbox
-            ember_cluster_array.clusters.append(ember_cluster)
-
+        ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg)
         self.cluster_bbox_pub.publish(ember_cluster_array)
-
         ###
 
         elapsed_time = end - start
@@ -220,7 +198,6 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
-        node.vis.destroy_window()
 
 if __name__ == '__main__':
     main()

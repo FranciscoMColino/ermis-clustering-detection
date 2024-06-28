@@ -3,6 +3,10 @@ import open3d as o3d
 import mlpack
 import sensor_msgs_py.point_cloud2 as pc2
 
+from std_msgs.msg import Header, String, UInt32
+from geometry_msgs.msg import Point
+from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D
+
 def organize_clusters(points, labels):
     # DOn't add in the -1 cluster (noise)
     uniq_labels = np.unique(labels)
@@ -86,3 +90,27 @@ def pose_msg_to_transform_matrix(msg):
     transformation_matrix[:3, 3] = translation
 
     return transformation_matrix
+
+def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg):
+    ember_cluster_array = EmberClusterArray()
+    ember_cluster_array.header = msg.header
+    ember_cluster_array.header.frame_id = 'cluster_bbox_detection'
+
+    for i in range(len(pcd_list)):
+        ember_cluster = EmberCluster()
+        cluster_points = np.asarray(pcd_list[i].points)
+        cluster_pc2 = pc2.create_cloud_xyz32(ember_cluster_array.header, cluster_points)
+        ember_cluster.point_cloud = cluster_pc2
+        ember_cluster.centroid = Point(x=centroids[i][0], y=centroids[i][1], z=centroids[i][2])
+
+        ember_bbox = EmberBoundingBox3D()
+        ember_bbox.det_label = String(data='default')
+        bbox_points = np.asarray(bb_list[i].get_box_points())
+        for bbox_point in bbox_points:
+            ember_bbox.points.append(Point(x=bbox_point[0], y=bbox_point[1], z=bbox_point[2]))
+        ember_bbox.points_count = UInt32(data=len(bbox_points))
+
+        ember_cluster.bounding_box = ember_bbox
+        ember_cluster_array.clusters.append(ember_cluster)
+
+    return ember_cluster_array
