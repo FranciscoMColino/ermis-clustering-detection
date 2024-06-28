@@ -16,8 +16,8 @@ import open3d as o3d
 import mlpack
 import yaml
 
-from ermis_cloud_proc_py.src.performance_tools.perf_monitor import PerformanceMonitorErmis
-from ermis_cloud_proc_py.src.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
+from ermis_cloud_proc_py.performance_tools.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
 
 ### START - Cluster organization and visualization
 
@@ -56,8 +56,7 @@ def apply_finite_z_passthrough_filter(points, z_min, z_max):
 def apply_dbscan_clustering(points, eps=0.35, min_size=10):
     d = mlpack.dbscan(input_=points, epsilon=eps, min_size=min_size)
     labels = d['assignments']
-    centroids = d['centroids']
-    return labels, centroids
+    return labels
 
 ### END - Raw point manipulation
 
@@ -93,7 +92,6 @@ def build_pointcloud_obb(clusters_point_clouds):
 
 ### END - Bounding box generation
 
-# TODO move this a utils module?, and the matrix conversion
 def quaternion_to_rotation_matrix(q):
     """
     Convert a quaternion to a 3x3 rotation matrix.
@@ -253,21 +251,13 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         # DBSCAN clustering
         points = np.asarray(self.pcd.points)
-        labels, centroids = apply_dbscan_clustering(points, 
+        labels = apply_dbscan_clustering(points, 
                                          eps=self.dbscan_clustering_config.eps,
                                          min_size=self.dbscan_clustering_config.min_samples)
 
         # Organize clusters and build point clouds
         clusters_points = organize_clusters(points, labels)
         pcd_list = build_pointcloud_clusters(clusters_points, self.label_colors)
-
-        # apply statistical outlier removal to each cluster before building bounding boxes
-        # TODO maybe have a different configuration for this
-        for pcd in pcd_list:
-            # noise removal
-            pcd.points = apply_statistical_outlier_removal(pcd, 
-                                                            nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors, 
-                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio) 
 
         # Build bounding boxes
         if self.bounding_box_config.bounding_box_type == "AABB":
@@ -295,7 +285,6 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             cluster_points = np.asarray(pcd_list[i].points)
             cluster_pc2 = pc2.create_cloud_xyz32(ember_cluster_array.header, cluster_points)
             ember_cluster.point_cloud = cluster_pc2
-            ember_cluster.centroid = Point(x=centroids[i][0], y=centroids[i][1], z=centroids[i][2])
 
             ember_bbox = EmberBoundingBox3D()
             ember_bbox.det_label = String(data='default')
@@ -327,12 +316,6 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             self.vis.add_geometry(pcd_list[i], reset_bounding_box=False)
             self.vis.add_geometry(bb_list[i], reset_bounding_box=False)
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
-
-        for i in range(len(centroids)):
-            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.05)
-            sphere.translate(centroids[i])
-            sphere.paint_uniform_color([0.7, 0, 1])
-            self.vis.add_geometry(sphere, reset_bounding_box=False)
 
         # Clear and update the visualizer
         self.vis.poll_events()
