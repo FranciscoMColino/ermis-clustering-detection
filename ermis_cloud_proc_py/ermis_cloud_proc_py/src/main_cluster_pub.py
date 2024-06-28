@@ -16,8 +16,8 @@ import open3d as o3d
 import mlpack
 import yaml
 
-from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
-from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecorder
+from ermis_cloud_proc_py.src.performance_tools.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.src.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
 
 ### START - Cluster organization and visualization
 
@@ -93,6 +93,7 @@ def build_pointcloud_obb(clusters_point_clouds):
 
 ### END - Bounding box generation
 
+# TODO move this a utils module?, and the matrix conversion
 def quaternion_to_rotation_matrix(q):
     """
     Convert a quaternion to a 3x3 rotation matrix.
