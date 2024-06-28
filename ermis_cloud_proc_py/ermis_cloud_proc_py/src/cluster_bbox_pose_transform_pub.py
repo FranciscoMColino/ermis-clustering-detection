@@ -16,8 +16,8 @@ import open3d as o3d
 import mlpack
 import yaml
 
-from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
-from ermis_cloud_proc_py.src.utils.perf_csv_recorder import PerformanceCSVRecorder
+from ermis_cloud_proc_py.src.performance_tools.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.src.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
 
 ### START - Cluster organization and visualization
 

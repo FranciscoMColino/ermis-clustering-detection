@@ -9,7 +9,7 @@ import time
 
 import open3d as o3d
 
-from ermis_cloud_proc_py.src.utils.perf_monitor import PerformanceMonitorErmis
+from ermis_cloud_proc_py.src.performance_tools.perf_monitor import PerformanceMonitorErmis
 
 ### START - Raw point manipulation
 
