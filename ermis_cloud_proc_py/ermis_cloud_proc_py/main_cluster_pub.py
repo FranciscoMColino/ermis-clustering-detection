@@ -11,15 +11,41 @@ import numpy as np
 import struct
 import time
 import argparse  # New import for argument parsing
-
 import open3d as o3d
 import mlpack
 import yaml
+import multiprocessing
+import signal
 
 from ermis_cloud_proc_py.performance_tools.perf_monitor import PerformanceMonitorErmis
 from ermis_cloud_proc_py.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
 from ermis_cloud_proc_py.utils import *
 from ermis_cloud_proc_py.visualization.o3d_detect_viz import Open3DClusteringVisualizer
+
+def clustering_visualizer_worker(clustering_queue):
+
+    def sigint_handler(sig, frame):
+        clustering_queue.put(None)
+        exit(0)
+
+    # sigint exit
+    signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGTERM, sigint_handler)
+
+    visualizer = Open3DClusteringVisualizer()
+    while True:
+        data = clustering_queue.get()
+        if data is None:
+            break
+        visualizer.reset()
+        clusters_points_list = data['cluster_points_list']
+        bb_points_list = data['bb_points_list']
+        centroids = data['centroids']
+        label_colors = data['label_colors']
+        visualizer.draw_clusters_from_points(clusters_points_list, label_colors)
+        visualizer.draw_bboxes_from_points(bb_points_list, bbox_type='AABB') # TODO change according to config
+        visualizer.draw_centroids(centroids)
+        visualizer.render()
 
 # Structs for point cloud processing configurations
 class ZFilterConfig:
@@ -46,7 +72,7 @@ class BoundingBoxConfig:
         self.bounding_box_type = bounding_box_type
 
 class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
-    def __init__(self, config_filename=None, recorder_filename=None):
+    def __init__(self, config_filename=None, recorder_filename=None, visualizer_queue=None):
         super().__init__('cluster_bbox_detection_publisher')
         self.cloud_subscription = self.create_subscription(
             PointCloud2,
@@ -67,8 +93,6 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.pose_subscription  # prevent unused variable warning
         self.current_pose = None
 
-        self.visualizer = Open3DClusteringVisualizer()
-
         self.pcd = o3d.geometry.PointCloud()
         
         self.pc_performance_monitor = PerformanceMonitorErmis()
@@ -81,6 +105,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         
         self.load_config(config_filename)
         self.label_colors = np.random.rand(1000, 3)
+
+        self.visualizer_queue = visualizer_queue
 
     def load_config(self, config_filename):
         if config_filename is not None:
@@ -175,27 +201,41 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                 elapsed_time, 1/elapsed_time, 
                 self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
 
-        self.visualizer.reset()
-        self.visualizer.draw_clusters(pcd_list)
-        self.visualizer.draw_bboxes(bb_list)
-        self.visualizer.draw_centroids(centroids)
-        self.visualizer.render()
+        bbox_points_list = [np.asarray(bb.get_box_points()) for bb in bb_list]
+        
+        # Visualizer in separate process
+        visualizer_data = {
+            'cluster_points_list': clusters_points,
+            'bb_points_list': bbox_points_list,
+            'centroids': centroids,
+            'label_colors': self.label_colors,
+        }
+
+        self.visualizer_queue.put(visualizer_data)
+        
         
 def main(args=None):
-    rclpy.init(args=args)
-
     # Argument parsing
     parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
     parser.add_argument('config_fp', type=str, help='Filepath for configuration file')
     parser.add_argument('--record_fp', type=str, default=None, help='Filepath for performance recording')
     parsed_args = parser.parse_args(args=args)
 
-    node = ClusterBboxDetectionWithPoseTransformPublisherNode(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp)
+    visualizer_queue = multiprocessing.Queue()
+
+    visualizer_process = multiprocessing.Process(target=clustering_visualizer_worker, args=(visualizer_queue,))
+    visualizer_process.start()
+
+    rclpy.init(args=args)
+    node = ClusterBboxDetectionWithPoseTransformPublisherNode(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp, visualizer_queue=visualizer_queue)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
+        visualizer_queue.put(None)
+        visualizer_process.terminate()
+        visualizer_process.join()
         node.destroy_node()
         rclpy.shutdown()
 

@@ -51,6 +51,16 @@ class Open3DClusteringVisualizer:
         for pcd in clusters_pcds:
             self.vis.add_geometry(pcd, reset_bounding_box=False)
 
+
+    def draw_clusters_from_points(self, clusters_points, label_colors):
+        pcd_list = np.zeros(len(clusters_points), dtype=object)
+        for i in range(len(clusters_points)):
+            pcd_cluster = o3d.geometry.PointCloud()
+            pcd_cluster.points = o3d.utility.Vector3dVector(clusters_points[i])
+            pcd_cluster.paint_uniform_color(label_colors[i])
+            pcd_list[i] = pcd_cluster
+        self.draw_clusters(pcd_list)
+
     """
     Draw the bounding boxes of the clusters
         - bboxes: list of o3d.geometry.AxisAlignedBoundingBox or o3d.geometry.OrientedBoundingBox
@@ -58,6 +68,20 @@ class Open3DClusteringVisualizer:
     def draw_bboxes(self, bboxes):
         for bbox in bboxes:
             self.vis.add_geometry(bbox, reset_bounding_box=False)
+
+
+    def draw_bboxes_from_points(self, clusters_points, bbox_type):
+        bbox_list = np.zeros(len(clusters_points), dtype=object)
+        for i in range(len(clusters_points)):
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(clusters_points[i])
+            if bbox_type == 'AABB':
+                bbox = pcd.get_axis_aligned_bounding_box()
+            elif bbox_type == 'OBB':
+                bbox = pcd.get_oriented_bounding_box()
+            bbox.color = [1, 0, 0]
+            bbox_list[i] = bbox
+        self.draw_bboxes(bbox_list)
 
     """
     Draw the centroids of the clusters
