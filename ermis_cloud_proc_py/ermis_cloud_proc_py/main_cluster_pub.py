@@ -25,7 +25,7 @@ from ermis_cloud_proc_py.visualization.o3d_detect_viz import Open3DClusteringVis
 def clustering_visualizer_worker(clustering_queue):
 
     def sigint_handler(sig, frame):
-        clustering_queue.put(None)
+        print('Exiting clustering visualizer...')
         exit(0)
 
     # sigint exit
@@ -213,18 +213,29 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         self.visualizer_queue.put(visualizer_data)
         
-        
+def signal_handler(sig, frame, node, process_1, queue_1):
+    print('Exiting via signal handler...')
+    queue_1.put(None)
+    process_1.terminate()
+    process_1.join()
+    node.destroy_node()
+    if rclpy.ok():
+        rclpy.shutdown()
+
 def main(args=None):
     # Argument parsing
     parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
     parser.add_argument('config_fp', type=str, help='Filepath for configuration file')
     parser.add_argument('--record_fp', type=str, default=None, help='Filepath for performance recording')
     parsed_args = parser.parse_args(args=args)
+    
 
     visualizer_queue = multiprocessing.Queue()
 
     visualizer_process = multiprocessing.Process(target=clustering_visualizer_worker, args=(visualizer_queue,))
     visualizer_process.start()
+
+    signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, node, visualizer_process, visualizer_queue))
 
     rclpy.init(args=args)
     node = ClusterBboxDetectionWithPoseTransformPublisherNode(config_filename=parsed_args.config_fp, recorder_filename=parsed_args.record_fp, visualizer_queue=visualizer_queue)
@@ -237,7 +248,8 @@ def main(args=None):
         visualizer_process.terminate()
         visualizer_process.join()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
