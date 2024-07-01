@@ -24,6 +24,12 @@ from ermis_cloud_proc_py.visualization.o3d_detect_viz import Open3DClusteringVis
 
 def clustering_visualizer_worker(clustering_queue):
 
+    global visualize_flag
+
+    if not visualize_flag:
+        # Exit if visualization is not enabled, should not be here
+        return
+
     def sigint_handler(sig, frame):
         print('Exiting clustering visualizer...')
         exit(0)
@@ -133,6 +139,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.current_pose = msg
 
     def pointcloud_callback(self, msg):
+        global visualize_flag
+
         start = time.time()
 
         # Raw point cloud pre-processing
@@ -214,13 +222,17 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             'label_colors': self.label_colors,
         }
 
-        self.visualizer_queue.put(visualizer_data)
+        if visualize_flag:
+            self.visualizer_queue.put(visualizer_data)
         
 def signal_handler(sig, frame, node, process_1, queue_1):
+    global visualize_flag
     print('Exiting via signal handler...')
-    queue_1.put(None)
-    process_1.terminate()
-    process_1.join()
+
+    if visualize_flag:
+        queue_1.put(None)
+        process_1.terminate()
+        process_1.join()
     node.destroy_node()
     if rclpy.ok():
         rclpy.shutdown()
@@ -230,13 +242,21 @@ def main(args=None):
     parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
     parser.add_argument('config_fp', type=str, help='Filepath for configuration file')
     parser.add_argument('--record_fp', type=str, default=None, help='Filepath for performance recording')
+    # argument, default false, for enabling visualization
+    parser.add_argument('--visualize', action='store_true', help='Enable visualization', default=False)
     parsed_args = parser.parse_args(args=args)
-    
+    print(parsed_args)
 
-    visualizer_queue = multiprocessing.Queue()
+    global visualize_flag
+    visualize_flag = parsed_args.visualize
 
-    visualizer_process = multiprocessing.Process(target=clustering_visualizer_worker, args=(visualizer_queue,))
-    visualizer_process.start()
+    if visualize_flag:
+        visualizer_queue = multiprocessing.Queue()
+        visualizer_process = multiprocessing.Process(target=clustering_visualizer_worker, args=(visualizer_queue,))
+        visualizer_process.start()
+    else :
+        visualizer_queue = None
+        visualizer_process = None
 
     signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, node, visualizer_process, visualizer_queue))
 
@@ -247,9 +267,10 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        visualizer_queue.put(None)
-        visualizer_process.terminate()
-        visualizer_process.join()
+        if visualize_flag:
+            visualizer_queue.put(None)
+            visualizer_process.terminate()
+            visualizer_process.join()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
