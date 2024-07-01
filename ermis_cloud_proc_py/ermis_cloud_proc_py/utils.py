@@ -75,8 +75,7 @@ def quaternion_to_rotation_matrix(q):
                   [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x**2 + y**2)]])
     return R
 
-def pose_msg_to_transform_matrix(msg):
-    pose = msg.pose
+def pose_msg_to_transform_matrix(pose):
     translation = np.array([pose.position.x,
                             pose.position.y,
                             pose.position.z])
@@ -91,7 +90,7 @@ def pose_msg_to_transform_matrix(msg):
 
     return transformation_matrix
 
-def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg):
+def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, pose = None):
     ember_cluster_array = EmberClusterArray()
     ember_cluster_array.header = msg.header
     ember_cluster_array.header.frame_id = 'cluster_bbox_detection'
@@ -112,5 +111,7 @@ def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg):
 
         ember_cluster.bounding_box = ember_bbox
         ember_cluster_array.clusters.append(ember_cluster)
+
+    ember_cluster_array.pose = pose
 
     return ember_cluster_array

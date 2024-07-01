@@ -129,6 +129,7 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             exit(1)
 
     def pose_callback(self, msg):
+        # pose stamped message
         self.current_pose = msg
 
     def pointcloud_callback(self, msg):
@@ -143,8 +144,10 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         # Open3D point cloud pre-processing
         self.pcd.points = o3d.utility.Vector3dVector(points)
 
+        current_pose = None
         if self.current_pose is not None:
-            transformation_matrix = pose_msg_to_transform_matrix(self.current_pose)
+            current_pose = self.current_pose.pose
+            transformation_matrix = pose_msg_to_transform_matrix(current_pose)
             self.pcd.transform(transformation_matrix)
         
         self.pcd.points = apply_voxel_downsampling(self.pcd, 
@@ -187,7 +190,7 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         end = time.time()
 
         ### transform to ROS2 message
-        ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg)
+        ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, current_pose)
         self.cluster_bbox_pub.publish(ember_cluster_array)
         ###
 
