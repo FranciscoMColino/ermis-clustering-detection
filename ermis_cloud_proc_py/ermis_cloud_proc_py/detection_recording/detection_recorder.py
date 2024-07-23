@@ -53,12 +53,22 @@ class DetectionRecorder:
                 np.eye(4, dtype='f4')  # transform
             )
 
-        # Define the format for saving the data
-        output_data = {
-            'detections': detections,
-            'seconds': seconds,
-            'nanoseconds': nanoseconds
-        }
+        # Define the dtype for the final structured array
+        dtype_2 = np.dtype([
+            ('detections', dtype, (len(bboxes),)),  # Array of detections
+            ('seconds', 'i4'),
+            ('nanoseconds', 'i4')
+        ])
+
+        # Create the structured array
+        output_data = np.array(
+            (
+                detections,
+                seconds,
+                nanoseconds
+            ),
+            dtype=dtype_2
+        )
 
         # Create the file name
         str_frame_number = f'{self.frame_number:05d}'

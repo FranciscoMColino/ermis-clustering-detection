@@ -35,4 +35,4 @@ bounding_box_type: "AABB" # "AABB" or "OBB"
 
 detection_recording:
   enable: True
-  save_dir: "data/ermis_detection/detection_res_1"
+  save_dir: "data/ermis_detection/detection_res_2"
