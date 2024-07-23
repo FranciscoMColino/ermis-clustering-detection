@@ -35,6 +35,26 @@ def apply_finite_z_passthrough_filter(points, z_min, z_max):
     valid_idx = (points[:, 2] >= z_min) & (points[:, 2] <= z_max) & ~np.isinf(points).any(axis=1)
     return points[valid_idx]
 
+def appply_patchwork_pp(patchwork_pp_model, points, verbose=False):
+    patchwork_pp_model.estimateGround(points)
+
+    ground      = patchwork_pp_model.getGround()
+    nonground   = patchwork_pp_model.getNonground()
+    time_taken  = patchwork_pp_model.getTimeTaken()
+
+    ground_idx      = patchwork_pp_model.getGroundIndices()
+    nonground_idx   = patchwork_pp_model.getNongroundIndices()
+
+    if verbose:
+        print_str = ""
+        print_str += f"PATCHWORK++: Original Points  #: {points.shape[0]}\n"
+        print_str += f"PATCHWORK++: Ground Points    #: {ground.shape[0]}\n"
+        print_str += f"PATCHWORK++: Nonground Points #: {nonground.shape[0]}\n"
+        print_str += f"PATCHWORK++: Time Taken : {time_taken / 1000000} (sec)"
+        print(print_str)
+
+    return ground, nonground, ground_idx, nonground_idx
+
 def apply_dbscan_clustering(points, eps=0.35, min_size=10):
     d = mlpack.dbscan(input_=points, epsilon=eps, min_size=min_size)
     labels = d['assignments']

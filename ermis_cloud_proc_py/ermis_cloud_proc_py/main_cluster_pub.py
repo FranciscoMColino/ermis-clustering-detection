@@ -68,6 +68,20 @@ class StatisticalOutlierRemovalConfig:
     def __init__(self, nb_neighbors=50, std_ratio=1.0):
         self.nb_neighbors = nb_neighbors
         self.std_ratio = std_ratio
+
+class PatchworkPPConfig:
+    def __init__(self, enable=False, verbose=False, enable_RNR=False, min_range=0.0, sensor_height=0.0, 
+                 num_iter=5, th_seeds=0.05, th_dist=0.05, uprightness_thr=0.5, adaptive_seed_selection_margin=-0.1):
+        self.enable = enable
+        self.verbose = verbose
+        self.enable_RNR = enable_RNR
+        self.min_range = min_range
+        self.sensor_height = sensor_height
+        self.num_iter = num_iter
+        self.th_seeds = th_seeds
+        self.th_dist = th_dist
+        self.uprightness_thr = uprightness_thr
+        self.adaptive_seed_selection_margin = adaptive_seed_selection_margin
     
 class DBSCANClusteringConfig:
     def __init__(self, eps=0.35, min_samples=10):
@@ -109,6 +123,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         else:
             self.enable_recorder = False
             self.pc_performance_recorder = None
+
+        
         
         self.load_config(config_filename)
         self.label_colors = np.random.rand(1000, 3)
@@ -116,16 +132,15 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.visualizer_queue = visualizer_queue
 
         patchwork_params = pypatchworkpp.Parameters()
-        patchwork_params.verbose = False
-        patchwork_params.enable_RNR = False
-        patchwork_params.min_range = 0
-
-        patchwork_params.sensor_height = 0.0
-        patchwork_params.num_iter = 5
-        patchwork_params.th_seeds = 0.15
-        patchwork_params.th_dist = 0.08
-        patchwork_params.uprightness_thr = 0.5
-        patchwork_params.adaptive_seed_selection_margin = -0.5
+        patchwork_params.verbose = self.patchwork_pp_config.verbose
+        patchwork_params.enable_RNR = self.patchwork_pp_config.enable_RNR
+        patchwork_params.min_range = self.patchwork_pp_config.min_range
+        patchwork_params.sensor_height = self.patchwork_pp_config.sensor_height
+        patchwork_params.num_iter = self.patchwork_pp_config.num_iter
+        patchwork_params.th_seeds = self.patchwork_pp_config.th_seeds
+        patchwork_params.th_dist = self.patchwork_pp_config.th_dist
+        patchwork_params.uprightness_thr = self.patchwork_pp_config.uprightness_thr
+        patchwork_params.adaptive_seed_selection_margin = self.patchwork_pp_config.adaptive_seed_selection_margin
 
         self.patchwork_pp_model = pypatchworkpp.patchworkpp(patchwork_params)
 
@@ -139,6 +154,18 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                     self.statistical_outlier_removal_config = StatisticalOutlierRemovalConfig(nb_neighbors=data['statistical_outlier_removal']['nb_neighbors'], std_ratio=data['statistical_outlier_removal']['std_ratio'])
                     self.dbscan_clustering_config = DBSCANClusteringConfig(eps=data['dbscan_clustering']['eps'], min_samples=data['dbscan_clustering']['min_samples'])
                     self.bounding_box_config = BoundingBoxConfig(bounding_box_type=data['bounding_box_type'])
+                    self.patchwork_pp_config = PatchworkPPConfig(
+                        enable=data['patchwork_pp']['enable'],
+                        verbose=data['patchwork_pp']['verbose'],
+                        enable_RNR=data['patchwork_pp']['enable_RNR'],
+                        min_range=data['patchwork_pp']['min_range'],
+                        sensor_height=data['patchwork_pp']['sensor_height'],
+                        num_iter=data['patchwork_pp']['num_iter'],
+                        th_seeds=data['patchwork_pp']['th_seeds'],
+                        th_dist=data['patchwork_pp']['th_dist'],
+                        uprightness_thr=data['patchwork_pp']['uprightness_thr'],
+                        adaptive_seed_selection_margin=data['patchwork_pp']['adaptive_seed_selection_margin']
+                    )
                 except KeyError as e:
                     print(f'Error: Configuration file is missing key: {e}')
                     exit(1)
@@ -178,31 +205,14 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         self.pcd.points = apply_statistical_outlier_removal(self.pcd, 
                                                             nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors, 
                                                             std_ratio=self.statistical_outlier_removal_config.std_ratio)
-
-        # DBSCAN clustering
+        
         points = np.asarray(self.pcd.points)
 
-        self.patchwork_pp_model.estimateGround(points)
+        if self.patchwork_pp_config.enable:
+            # Patchwork++ ground segmentation
+            ground, nonground, _, _ = appply_patchwork_pp(self.patchwork_pp_model, points, self.patchwork_pp_config.verbose)
 
-        ground      = self.patchwork_pp_model.getGround()
-        nonground   = self.patchwork_pp_model.getNonground()
-        time_taken  = self.patchwork_pp_model.getTimeTaken()
-
-        ground_idx      = self.patchwork_pp_model.getGroundIndices()
-        nonground_idx   = self.patchwork_pp_model.getNongroundIndices()
-
-        print("Origianl Points  #: ", points.shape[0])
-        print("Ground Points    #: ", ground.shape[0])
-        print("Nonground Points #: ", nonground.shape[0])
-        print("Time Taken : ", time_taken / 1000000, "(sec)")
-        print("Press ... \n")
-        print("\t H  : help")
-        print("\t N  : visualize the surface normals")
-        print("\tESC : close the Open3D window")
-
-        points = nonground
-        #points = ground
-
+            points = nonground
 
         labels, centroids = apply_dbscan_clustering(points, 
                                          eps=self.dbscan_clustering_config.eps,
@@ -217,8 +227,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         for pcd in pcd_list:
             # noise removal
             pcd.points = apply_statistical_outlier_removal(pcd, 
-                                                            nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors, 
-                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio) 
+                                                            nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors,
+                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio * 0.25)
 
         # Build bounding boxes
         if self.bounding_box_config.bounding_box_type == "AABB":
