@@ -22,6 +22,7 @@ from ermis_cloud_proc_py.performance_tools.perf_monitor import PerformanceMonito
 from ermis_cloud_proc_py.performance_tools.perf_csv_recorder import PerformanceCSVRecorder
 from ermis_cloud_proc_py.utils import *
 from ermis_cloud_proc_py.visualization.o3d_detect_viz import Open3DClusteringVisualizer
+from ermis_cloud_proc_py.detection_recording.detection_recorder import DetectionRecorder
 
 def clustering_visualizer_worker(clustering_queue):
 
@@ -92,6 +93,11 @@ class BoundingBoxConfig:
     def __init__(self, bounding_box_type="AABB"): # TODO instead of string use a class with enum
         self.bounding_box_type = bounding_box_type
 
+class DetectionRecordingConfig:
+    def __init__(self, enable=False, save_dir=None):
+        self.enable = enable
+        self.save_dir = save_dir
+
 class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
     def __init__(self, config_filename=None, recorder_filename=None, visualizer_queue=None):
         super().__init__('cluster_bbox_detection_publisher')
@@ -121,28 +127,32 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             self.enable_recorder = True
             self.pc_performance_recorder = PerformanceCSVRecorder(recorder_filename)
         else:
-            self.enable_recorder = False
-            self.pc_performance_recorder = None
-
-        
+            self.enable_recorder = False # TODO rename from enable_recorder to something less generic
+            self.pc_performance_recorder = None        
         
         self.load_config(config_filename)
         self.label_colors = np.random.rand(1000, 3)
 
         self.visualizer_queue = visualizer_queue
 
-        patchwork_params = pypatchworkpp.Parameters()
-        patchwork_params.verbose = self.patchwork_pp_config.verbose
-        patchwork_params.enable_RNR = self.patchwork_pp_config.enable_RNR
-        patchwork_params.min_range = self.patchwork_pp_config.min_range
-        patchwork_params.sensor_height = self.patchwork_pp_config.sensor_height
-        patchwork_params.num_iter = self.patchwork_pp_config.num_iter
-        patchwork_params.th_seeds = self.patchwork_pp_config.th_seeds
-        patchwork_params.th_dist = self.patchwork_pp_config.th_dist
-        patchwork_params.uprightness_thr = self.patchwork_pp_config.uprightness_thr
-        patchwork_params.adaptive_seed_selection_margin = self.patchwork_pp_config.adaptive_seed_selection_margin
+        if self.patchwork_pp_config.enable:
+            self.patchwork_pp_model = pypatchworkpp.patchworkpp(self.get_patchwork_pp_params())
+        
+        if self.detection_recording_config.enable:
+            self.detection_recorder = DetectionRecorder(self.detection_recording_config.save_dir)
 
-        self.patchwork_pp_model = pypatchworkpp.patchworkpp(patchwork_params)
+    def get_patchwork_pp_params(self):
+        return pypatchworkpp.Parameters(
+            verbose=self.patchwork_pp_config.verbose,
+            enable_RNR=self.patchwork_pp_config.enable_RNR,
+            min_range=self.patchwork_pp_config.min_range,
+            sensor_height=self.patchwork_pp_config.sensor_height,
+            num_iter=self.patchwork_pp_config.num_iter,
+            th_seeds=self.patchwork_pp_config.th_seeds,
+            th_dist=self.patchwork_pp_config.th_dist,
+            uprightness_thr=self.patchwork_pp_config.uprightness_thr,
+            adaptive_seed_selection_margin=self.patchwork_pp_config.adaptive_seed_selection_margin
+        )
 
     def load_config(self, config_filename):
         if config_filename is not None:
@@ -154,18 +164,29 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                     self.statistical_outlier_removal_config = StatisticalOutlierRemovalConfig(nb_neighbors=data['statistical_outlier_removal']['nb_neighbors'], std_ratio=data['statistical_outlier_removal']['std_ratio'])
                     self.dbscan_clustering_config = DBSCANClusteringConfig(eps=data['dbscan_clustering']['eps'], min_samples=data['dbscan_clustering']['min_samples'])
                     self.bounding_box_config = BoundingBoxConfig(bounding_box_type=data['bounding_box_type'])
-                    self.patchwork_pp_config = PatchworkPPConfig(
-                        enable=data['patchwork_pp']['enable'],
-                        verbose=data['patchwork_pp']['verbose'],
-                        enable_RNR=data['patchwork_pp']['enable_RNR'],
-                        min_range=data['patchwork_pp']['min_range'],
-                        sensor_height=data['patchwork_pp']['sensor_height'],
-                        num_iter=data['patchwork_pp']['num_iter'],
-                        th_seeds=data['patchwork_pp']['th_seeds'],
-                        th_dist=data['patchwork_pp']['th_dist'],
-                        uprightness_thr=data['patchwork_pp']['uprightness_thr'],
-                        adaptive_seed_selection_margin=data['patchwork_pp']['adaptive_seed_selection_margin']
-                    )
+                    if data['patchwork_pp'] is not None and data['patchwork_pp']['enable']:
+                        self.patchwork_pp_config = PatchworkPPConfig(
+                            enable=data['patchwork_pp']['enable'],
+                            verbose=data['patchwork_pp']['verbose'],
+                            enable_RNR=data['patchwork_pp']['enable_RNR'],
+                            min_range=data['patchwork_pp']['min_range'],
+                            sensor_height=data['patchwork_pp']['sensor_height'],
+                            num_iter=data['patchwork_pp']['num_iter'],
+                            th_seeds=data['patchwork_pp']['th_seeds'],
+                            th_dist=data['patchwork_pp']['th_dist'],
+                            uprightness_thr=data['patchwork_pp']['uprightness_thr'],
+                            adaptive_seed_selection_margin=data['patchwork_pp']['adaptive_seed_selection_margin']
+                        )
+                    else:
+                        self.patchwork_pp_config = PatchworkPPConfig(enable=False)
+
+                    if data['detection_recording'] is not None and data['detection_recording']['enable']:
+                        self.detection_recording_config = DetectionRecordingConfig(
+                            enable=data['detection_recording']['enable'],
+                            save_dir=data['detection_recording']['save_dir']
+                        )
+                    else:
+                        self.detection_recording_config = DetectionRecordingConfig(enable=False)
                 except KeyError as e:
                     print(f'Error: Configuration file is missing key: {e}')
                     exit(1)
@@ -249,6 +270,9 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, current_pose)
         self.cluster_bbox_pub.publish(ember_cluster_array)
         ###
+
+        if self.detection_recording_config.enable:
+            self.detection_recorder.record(bb_list, centroids, msg.header.stamp.sec, msg.header.stamp.nanosec)
 
         elapsed_time = end - start
         self.pc_performance_monitor.update(elapsed_time)
