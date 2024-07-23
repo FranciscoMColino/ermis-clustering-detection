@@ -245,7 +245,8 @@ def main(args=None):
     # argument, default false, for enabling visualization
     parser.add_argument('--visualize', action='store_true', help='Enable visualization', default=False)
     parsed_args = parser.parse_args(args=args)
-    print(parsed_args)
+
+    print(f'Arguments: {parsed_args}')
 
     global visualize_flag
     visualize_flag = parsed_args.visualize
