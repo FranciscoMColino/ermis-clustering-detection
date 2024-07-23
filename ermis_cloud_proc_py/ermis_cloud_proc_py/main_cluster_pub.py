@@ -6,6 +6,7 @@ from std_msgs.msg import Header, String, UInt32
 from geometry_msgs.msg import Point
 from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D
 import sensor_msgs_py.point_cloud2 as pc2
+import pypatchworkpp
 
 import numpy as np
 import struct
@@ -114,6 +115,20 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         self.visualizer_queue = visualizer_queue
 
+        patchwork_params = pypatchworkpp.Parameters()
+        patchwork_params.verbose = False
+        patchwork_params.enable_RNR = False
+        patchwork_params.min_range = 0
+
+        patchwork_params.sensor_height = 0.0
+        patchwork_params.num_iter = 5
+        patchwork_params.th_seeds = 0.15
+        patchwork_params.th_dist = 0.08
+        patchwork_params.uprightness_thr = 0.5
+        patchwork_params.adaptive_seed_selection_margin = -0.5
+
+        self.patchwork_pp_model = pypatchworkpp.patchworkpp(patchwork_params)
+
     def load_config(self, config_filename):
         if config_filename is not None:
             with open(config_filename, 'r') as file:
@@ -166,6 +181,29 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         # DBSCAN clustering
         points = np.asarray(self.pcd.points)
+
+        self.patchwork_pp_model.estimateGround(points)
+
+        ground      = self.patchwork_pp_model.getGround()
+        nonground   = self.patchwork_pp_model.getNonground()
+        time_taken  = self.patchwork_pp_model.getTimeTaken()
+
+        ground_idx      = self.patchwork_pp_model.getGroundIndices()
+        nonground_idx   = self.patchwork_pp_model.getNongroundIndices()
+
+        print("Origianl Points  #: ", points.shape[0])
+        print("Ground Points    #: ", ground.shape[0])
+        print("Nonground Points #: ", nonground.shape[0])
+        print("Time Taken : ", time_taken / 1000000, "(sec)")
+        print("Press ... \n")
+        print("\t H  : help")
+        print("\t N  : visualize the surface normals")
+        print("\tESC : close the Open3D window")
+
+        points = nonground
+        #points = ground
+
+
         labels, centroids = apply_dbscan_clustering(points, 
                                          eps=self.dbscan_clustering_config.eps,
                                          min_size=self.dbscan_clustering_config.min_samples)

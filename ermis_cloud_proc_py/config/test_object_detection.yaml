@@ -1,6 +1,13 @@
 z_filter:
-  z_min: -0.025
+  z_filter_enable: True
+  z_min: -0.05
   z_max: 2.0
+
+ground_segmentation:
+  ground_segmentation_enable: True
+  distance_threshold: 0.2
+  ransac_n: 3
+  num_iterations: 100
 
 voxel_downsample:
   voxel_size: 0.025
