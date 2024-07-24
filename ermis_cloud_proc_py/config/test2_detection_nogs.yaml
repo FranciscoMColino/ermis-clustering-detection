@@ -9,12 +9,6 @@ xy_filter:
   y_min: -12.5
   y_max: 12.5
 
-ground_segmentation:
-  ground_segmentation_enable: True
-  distance_threshold: 0.2
-  ransac_n: 3
-  num_iterations: 100
-
 voxel_downsample:
   voxel_size: 0.025
 
@@ -41,5 +35,5 @@ dbscan_clustering:
 bounding_box_type: "AABB" # "AABB" or "OBB"
 
 detection_recording:
-  enable: True
+  enable: False
   save_dir: "data/ermis_detection/detection_res_2"
