@@ -93,3 +93,11 @@ class Open3DClusteringVisualizer:
             sphere.translate(centroid)
             sphere.paint_uniform_color([0.7, 0, 1])
             self.vis.add_geometry(sphere, reset_bounding_box=False)
+
+    def draw_points(self, points, color = [0.3, 0.3, 0.3]):
+        if len(points) == 0:
+            return
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.paint_uniform_color(color)
+        self.vis.add_geometry(pcd, reset_bounding_box=False)

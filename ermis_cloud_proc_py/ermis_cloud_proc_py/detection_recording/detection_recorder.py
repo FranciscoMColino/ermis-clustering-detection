@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import datetime
 
 """
     This module is responsible for recording the detections of the system.
@@ -29,6 +30,13 @@ class DetectionRecorder:
         # create the save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+        else:
+            # add suffix based on current date and time if the directory already exists and issue a warning
+            now = datetime.datetime.now()
+            suffix = now.strftime("%Y%m%d_%H%M%S")
+            self.save_dir = f'{save_dir}_{suffix}'
+            os.makedirs(self.save_dir)
+            print(f'Warning: The directory {save_dir} already exists. Saving detections to {self.save_dir} instead.')
 
     def record(self, bboxes, centroids, seconds, nanoseconds):
         # Define the dtype for the structured array

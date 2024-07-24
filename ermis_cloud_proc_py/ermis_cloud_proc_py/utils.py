@@ -32,8 +32,16 @@ def load_pointcloud_from_ros2_msg(msg):
     return pc2_points_64
 
 def apply_finite_z_passthrough_filter(points, z_min, z_max):
-    valid_idx = (points[:, 2] >= z_min) & (points[:, 2] <= z_max) & ~np.isinf(points).any(axis=1)
-    return points[valid_idx]
+    valid_idx = ~np.isinf(points).any(axis=1)
+    points = points[valid_idx]
+    in_bounds_idx = (points[:, 2] >= z_min) & (points[:, 2] <= z_max)
+    return points[in_bounds_idx], points[~in_bounds_idx]
+
+def apply_finite_xy_passthrough_filter(points, x_min, x_max, y_min, y_max):
+    valid_idx = ~np.isinf(points).any(axis=1)
+    points = points[valid_idx]
+    in_bounds_idx = (points[:, 0] >= x_min) & (points[:, 0] <= x_max) & (points[:, 1] >= y_min) & (points[:, 1] <= y_max)
+    return points[in_bounds_idx], points[~in_bounds_idx]
 
 def appply_patchwork_pp(patchwork_pp_model, points, verbose=False):
     patchwork_pp_model.estimateGround(points)

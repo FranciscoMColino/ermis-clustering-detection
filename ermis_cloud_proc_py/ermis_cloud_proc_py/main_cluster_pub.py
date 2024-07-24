@@ -50,9 +50,13 @@ def clustering_visualizer_worker(clustering_queue):
         bb_points_list = data['bb_points_list']
         centroids = data['centroids']
         label_colors = data['label_colors']
+        z_out_points = data['z_out_points']
+        xy_out_points = data['xy_out_points']
         visualizer.draw_clusters_from_points(clusters_points_list, label_colors)
         visualizer.draw_bboxes_from_points(bb_points_list, bbox_type='AABB') # TODO change according to config
         visualizer.draw_centroids(centroids)
+        visualizer.draw_points(z_out_points, color=[0.7, 0.7, 0.7])
+        visualizer.draw_points(xy_out_points, color=[0.4, 0.4, 0.4])
         visualizer.render()
 
 # Structs for point cloud processing configurations
@@ -60,6 +64,14 @@ class ZFilterConfig:
     def __init__(self, z_min=0.0, z_max=2.0):
         self.z_min = z_min
         self.z_max = z_max
+
+class XYFilterConfig:
+    def __init__(self, enable, x_min=-10.0, x_max=10.0, y_min=-10.0, y_max=10.0):
+        self.enable = enable
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = y_min
+        self.y_max = y_max
 
 class VoxelDownsampleConfig:
     def __init__(self, voxel_size=0.35):
@@ -160,6 +172,7 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                 data = yaml.safe_load(file)
                 try:
                     self.z_filter_config = ZFilterConfig(z_min=data['z_filter']['z_min'], z_max=data['z_filter']['z_max'])
+                    self.xy_filter_config = XYFilterConfig(enable=data['xy_filter']['enable'], x_min=data['xy_filter']['x_min'], x_max=data['xy_filter']['x_max'], y_min=data['xy_filter']['y_min'], y_max=data['xy_filter']['y_max'])
                     self.voxel_downsample_config = VoxelDownsampleConfig(voxel_size=data['voxel_downsample']['voxel_size'])
                     self.statistical_outlier_removal_config = StatisticalOutlierRemovalConfig(nb_neighbors=data['statistical_outlier_removal']['nb_neighbors'], std_ratio=data['statistical_outlier_removal']['std_ratio'])
                     self.dbscan_clustering_config = DBSCANClusteringConfig(eps=data['dbscan_clustering']['eps'], min_samples=data['dbscan_clustering']['min_samples'])
@@ -208,9 +221,18 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         # Raw point cloud pre-processing
         points = load_pointcloud_from_ros2_msg(msg)
-        points = apply_finite_z_passthrough_filter(points, 
+        points, z_out_points = apply_finite_z_passthrough_filter(points, 
                                                     z_min=self.z_filter_config.z_min, 
                                                     z_max=self.z_filter_config.z_max)
+        
+        if self.xy_filter_config.enable:
+            points, xy_out_points = apply_finite_xy_passthrough_filter(points, 
+                                                x_min=self.xy_filter_config.x_min, 
+                                                x_max=self.xy_filter_config.x_max, 
+                                                y_min=self.xy_filter_config.y_min, 
+                                                y_max=self.xy_filter_config.y_max)
+        else:
+            xy_out_points = np.array([])
         
         # Open3D point cloud pre-processing
         self.pcd.points = o3d.utility.Vector3dVector(points)
@@ -292,6 +314,9 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             'bb_points_list': bbox_points_list,
             'centroids': centroids,
             'label_colors': self.label_colors,
+            # from here on this data is more for debugging purposes
+            'z_out_points': z_out_points,
+            'xy_out_points': xy_out_points,
         }
 
         if visualize_flag:
