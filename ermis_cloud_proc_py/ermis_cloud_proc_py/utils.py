@@ -159,5 +159,4 @@ def create_box_lines(x_range, y_range, z_range, color=[0.3, 0.3, 0.3]):
         [[x_range[1], y_range[0], z_range[1]], [x_range[1], y_range[1], z_range[1]]],
         [[x_range[0], y_range[1], z_range[1]], [x_range[1], y_range[1], z_range[1]]]
     ]
-    print(f"Created {len(lines)} lines")
     return lines
