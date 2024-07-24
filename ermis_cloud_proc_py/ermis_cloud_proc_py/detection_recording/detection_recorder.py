@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import datetime
+import yaml
 
 """
     This module is responsible for recording the detections of the system.
@@ -23,20 +24,41 @@ import datetime
 """
 
 class DetectionRecorder:
-    def __init__(self, save_dir):
+    def __init__(self, save_dir, use_zed_wrapper_properties=True): # TODO read the optional argument from the config file
         self.save_dir = save_dir
         self.frame_number = 0
 
+        # specific
+
+        zed_wrapper_properties_suffix = ''
+
+        with open('/home/colino/hawk/zed_wrapper_config/common.yaml', 'r') as file: # TODO read the path from the config file
+            config = yaml.load(file, Loader=yaml.FullLoader)
+            config = config['/**']['ros__parameters']
+            pub_downscale_factor = config['general']['pub_downscale_factor']
+            pub_frame_rate = config['general']['pub_frame_rate']
+            depth_mode = config['depth']['depth_mode'].replace('_', '')
+            point_cloud_freq = config['depth']['point_cloud_freq']
+            depth_confidence = config['depth']['depth_confidence']
+            depth_texture_conf = config['depth']['depth_texture_conf']
+
+            zed_wrapper_properties_suffix = f'-pdf{pub_downscale_factor}_pfr{pub_frame_rate}_dm{depth_mode}_pcf{point_cloud_freq}_dc{depth_confidence}_dtf{depth_texture_conf}'
+        
+            self.save_dir = f'{self.save_dir}{zed_wrapper_properties_suffix}'
+
+            print(f'\nsave_dir after zed_wrapper_properties_suffix: {self.save_dir}')
+
         # create the save directory if it does not exist
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir )
         else:
             # add suffix based on current date and time if the directory already exists and issue a warning
             now = datetime.datetime.now()
             suffix = now.strftime("%Y%m%d_%H%M%S")
-            self.save_dir = f'{save_dir}_{suffix}'
+            old_save_dir = self.save_dir
+            self.save_dir = f'{self.save_dir }-{suffix}'
             os.makedirs(self.save_dir)
-            print(f'Warning: The directory {save_dir} already exists. Saving detections to {self.save_dir} instead.')
+            print(f'\nWarning: The directory {old_save_dir} already exists. Saving detections to {self.save_dir} instead.')
 
     def record(self, bboxes, centroids, seconds, nanoseconds):
         # Define the dtype for the structured array
