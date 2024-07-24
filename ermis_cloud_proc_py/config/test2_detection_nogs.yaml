@@ -4,10 +4,10 @@ z_filter:
 
 xy_filter:
   enable: True
-  x_min: -10.0
+  x_min: -2.5
   x_max: 30.0
-  y_min: -15.0
-  y_max: 15.0
+  y_min: -12.5
+  y_max: 12.5
 
 ground_segmentation:
   ground_segmentation_enable: True

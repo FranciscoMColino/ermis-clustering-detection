@@ -143,3 +143,21 @@ def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, pose = None
     ember_cluster_array.pose = pose
 
     return ember_cluster_array
+
+def create_box_lines(x_range, y_range, z_range, color=[0.3, 0.3, 0.3]):
+    lines = [
+        [[x_range[0], y_range[0], z_range[0]], [x_range[1], y_range[0], z_range[0]]],
+        [[x_range[0], y_range[0], z_range[0]], [x_range[0], y_range[1], z_range[0]]],
+        [[x_range[0], y_range[0], z_range[0]], [x_range[0], y_range[0], z_range[1]]],
+        [[x_range[1], y_range[0], z_range[0]], [x_range[1], y_range[1], z_range[0]]],
+        [[x_range[1], y_range[0], z_range[0]], [x_range[1], y_range[0], z_range[1]]],
+        [[x_range[0], y_range[1], z_range[0]], [x_range[1], y_range[1], z_range[0]]],
+        [[x_range[0], y_range[1], z_range[0]], [x_range[0], y_range[1], z_range[1]]],
+        [[x_range[0], y_range[0], z_range[1]], [x_range[1], y_range[0], z_range[1]]],
+        [[x_range[0], y_range[0], z_range[1]], [x_range[0], y_range[1], z_range[1]]],
+        [[x_range[1], y_range[1], z_range[0]], [x_range[1], y_range[1], z_range[1]]],
+        [[x_range[1], y_range[0], z_range[1]], [x_range[1], y_range[1], z_range[1]]],
+        [[x_range[0], y_range[1], z_range[1]], [x_range[1], y_range[1], z_range[1]]]
+    ]
+    print(f"Created {len(lines)} lines")
+    return lines

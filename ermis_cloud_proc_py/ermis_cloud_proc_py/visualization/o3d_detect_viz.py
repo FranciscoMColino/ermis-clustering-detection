@@ -101,3 +101,13 @@ class Open3DClusteringVisualizer:
         pcd.points = o3d.utility.Vector3dVector(points)
         pcd.paint_uniform_color(color)
         self.vis.add_geometry(pcd, reset_bounding_box=False)
+
+    def draw_lineset_from_points(self, lines, color = [0.3, 0.3, 0.3]):
+        if len(lines) == 0:
+            return
+        lineset = o3d.geometry.LineSet()
+        for line in lines:
+            lineset.points.extend([line[0], line[1]])
+            lineset.lines.append([len(lineset.points) - 2, len(lineset.points) - 1])
+        lineset.colors = o3d.utility.Vector3dVector([color for i in range(len(lineset.lines))])
+        self.vis.add_geometry(lineset, reset_bounding_box=False)

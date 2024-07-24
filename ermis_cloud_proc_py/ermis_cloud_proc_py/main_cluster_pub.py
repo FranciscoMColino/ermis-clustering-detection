@@ -52,11 +52,20 @@ def clustering_visualizer_worker(clustering_queue):
         label_colors = data['label_colors']
         z_out_points = data['z_out_points']
         xy_out_points = data['xy_out_points']
+        z_filter_args = data['z_filter_args']
+        xy_filter_args = data['xy_filter_args']
         visualizer.draw_clusters_from_points(clusters_points_list, label_colors)
         visualizer.draw_bboxes_from_points(bb_points_list, bbox_type='AABB') # TODO change according to config
         visualizer.draw_centroids(centroids)
         visualizer.draw_points(z_out_points, color=[0.7, 0.7, 0.7])
         visualizer.draw_points(xy_out_points, color=[0.4, 0.4, 0.4])
+
+        if xy_filter_args is not None:
+            # define lines that define a box using z and xy filter arguments
+            
+            lines = create_box_lines([xy_filter_args[0], xy_filter_args[1]], [xy_filter_args[2], xy_filter_args[3]], [z_filter_args[0], z_filter_args[1]])
+            visualizer.draw_lineset_from_points(lines, color=[0, 1, 0])
+
         visualizer.render()
 
 # Structs for point cloud processing configurations
@@ -317,6 +326,8 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             # from here on this data is more for debugging purposes
             'z_out_points': z_out_points,
             'xy_out_points': xy_out_points,
+            'z_filter_args': (self.z_filter_config.z_min, self.z_filter_config.z_max),
+            'xy_filter_args': (self.xy_filter_config.x_min, self.xy_filter_config.x_max, self.xy_filter_config.y_min, self.xy_filter_config.y_max) if self.xy_filter_config.enable else None,
         }
 
         if visualize_flag:
