@@ -35,5 +35,5 @@ dbscan_clustering:
 bounding_box_type: "AABB" # "AABB" or "OBB"
 
 detection_recording:
-  enable: False
-  save_dir: "data/ermis_detection/detection_res_2"
+  enable: True
+  save_dir: "data/ermis_detection/figure8_transporter_empty_1"

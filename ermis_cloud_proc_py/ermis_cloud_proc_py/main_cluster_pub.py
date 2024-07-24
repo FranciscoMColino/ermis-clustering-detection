@@ -297,23 +297,31 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         end = time.time()
 
+        elapsed_time = end - start
+        self.pc_performance_monitor.update(elapsed_time)
+
+        verbose_performance_str = ""
+
+        # print current elapsed fps and mean elapsed fps
+        #print(f'FPS: {(1/elapsed_time):.2f} ; Elapsed time: {(elapsed_time*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f} ; Mean Elapsed time: {(self.pc_performance_monitor.get_mean()*1000):.2f}')
+        verbose_performance_str += f'DETECTION # Elapsed(ms): {(elapsed_time*1000):.2f} ; FPS: {(1/elapsed_time):.2f} ; Mean Elapsed(ms): {(self.pc_performance_monitor.get_mean()*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f}\n'
+        if self.enable_recorder:
+            self.pc_performance_recorder.record(
+                elapsed_time, 1/elapsed_time, 
+                self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
+
         ### transform to ROS2 message
         ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, current_pose)
         self.cluster_bbox_pub.publish(ember_cluster_array)
         ###
 
+        elapsed_time = time.time() - start
+        verbose_performance_str += f'ROS2_PUB # Elapsed(ms): {(elapsed_time*1000):.2f} ; FPS: {(1/elapsed_time):.2f}\n'
+
         if self.detection_recording_config.enable:
             self.detection_recorder.record(bb_list, centroids, msg.header.stamp.sec, msg.header.stamp.nanosec)
-
-        elapsed_time = end - start
-        self.pc_performance_monitor.update(elapsed_time)
-
-        # print current elapsed fps and mean elapsed fps
-        print(f'FPS: {(1/elapsed_time):.2f} ; Elapsed time: {(elapsed_time*1000):.2f} ; Mean FPS: {(1/self.pc_performance_monitor.get_mean()):.2f} ; Mean Elapsed time: {(self.pc_performance_monitor.get_mean()*1000):.2f}')
-        if self.enable_recorder:
-            self.pc_performance_recorder.record(
-                elapsed_time, 1/elapsed_time, 
-                self.pc_performance_monitor.get_mean(), 1/self.pc_performance_monitor.get_mean())
+            elapsed_time = time.time() - start
+            verbose_performance_str += f'RECORD # Elapsed(ms): {(elapsed_time*1000):.2f} ; FPS: {(1/elapsed_time):.2f}\n'
 
         bbox_points_list = [np.asarray(bb.get_box_points()) for bb in bb_list]
         
@@ -332,6 +340,10 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         if visualize_flag:
             self.visualizer_queue.put(visualizer_data)
+            elapsed_time = time.time() - start
+            verbose_performance_str += f'VISUALIZATION # Elapsed(ms): {(elapsed_time*1000):.2f} ; FPS: {(1/elapsed_time):.2f}\n'
+
+        print(verbose_performance_str)
         
 def signal_handler(sig, frame, node, process_1, queue_1):
     global visualize_flag
