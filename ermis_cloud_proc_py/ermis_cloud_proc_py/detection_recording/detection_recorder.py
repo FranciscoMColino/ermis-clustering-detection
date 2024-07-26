@@ -9,7 +9,7 @@ import yaml
     Each frame is saved in a separate file in a given directory.
     format: detected_bbox3d_{frame_number}.npy
 
-    format for the npy file:
+    format for the npy file: TODO this has to be updated
     (
         detections: (
             id: int, # id of the detection, optional, for now a placeholder, to be compatible with tracking

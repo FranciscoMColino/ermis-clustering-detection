@@ -163,17 +163,16 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             self.detection_recorder = DetectionRecorder(self.detection_recording_config.save_dir)
 
     def get_patchwork_pp_params(self):
-        return pypatchworkpp.Parameters(
-            verbose=self.patchwork_pp_config.verbose,
-            enable_RNR=self.patchwork_pp_config.enable_RNR,
-            min_range=self.patchwork_pp_config.min_range,
-            sensor_height=self.patchwork_pp_config.sensor_height,
-            num_iter=self.patchwork_pp_config.num_iter,
-            th_seeds=self.patchwork_pp_config.th_seeds,
-            th_dist=self.patchwork_pp_config.th_dist,
-            uprightness_thr=self.patchwork_pp_config.uprightness_thr,
-            adaptive_seed_selection_margin=self.patchwork_pp_config.adaptive_seed_selection_margin
-        )
+        params = pypatchworkpp.Parameters()
+        params.enable_RNR=self.patchwork_pp_config.enable_RNR
+        params.min_range=self.patchwork_pp_config.min_range
+        params.sensor_height=self.patchwork_pp_config.sensor_height
+        params.num_iter=self.patchwork_pp_config.num_iter
+        params.th_seeds=self.patchwork_pp_config.th_seeds
+        params.th_dist=self.patchwork_pp_config.th_dist
+        params.uprightness_thr=self.patchwork_pp_config.uprightness_thr
+        params.adaptive_seed_selection_margin=self.patchwork_pp_config.adaptive_seed_selection_margin
+        return params
 
     def load_config(self, config_filename):
         if config_filename is not None:

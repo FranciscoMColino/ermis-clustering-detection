@@ -1,5 +1,7 @@
+# ln8 uses z=0.5 for the camera
+
 z_filter:
-  z_min: -0.025
+  z_min: -0.45
   z_max: 2.0
 
 xy_filter:
@@ -17,7 +19,7 @@ statistical_outlier_removal:
   std_ratio: 0.01
 
 patchwork_pp:
-  enable: True
+  enable: False
   verbose: True
   enable_RNR: False
   min_range: 0.0
@@ -35,5 +37,5 @@ dbscan_clustering:
 bounding_box_type: "AABB" # "AABB" or "OBB"
 
 detection_recording:
-  enable: True
+  enable: False
   save_dir: "data/ermis_detection/figure8_transporter_empty_2"
