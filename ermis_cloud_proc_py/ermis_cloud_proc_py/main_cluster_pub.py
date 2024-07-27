@@ -276,10 +276,11 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         # apply statistical outlier removal to each cluster before building bounding boxes
         # TODO maybe have a different configuration for this
         for pcd in pcd_list:
+            break
             # noise removal
             pcd.points = apply_statistical_outlier_removal(pcd, 
                                                             nb_neighbors=self.statistical_outlier_removal_config.nb_neighbors,
-                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio * 0.25)
+                                                            std_ratio=self.statistical_outlier_removal_config.std_ratio * 4)
 
         # Build bounding boxes
         if self.bounding_box_config.bounding_box_type == "AABB":

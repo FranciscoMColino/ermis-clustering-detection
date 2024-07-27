@@ -32,21 +32,24 @@ class DetectionRecorder:
 
         zed_wrapper_properties_suffix = ''
 
-        with open('/home/colino/hawk/zed_wrapper_config/common.yaml', 'r') as file: # TODO read the path from the config file
-            config = yaml.load(file, Loader=yaml.FullLoader)
-            config = config['/**']['ros__parameters']
-            pub_downscale_factor = config['general']['pub_downscale_factor']
-            pub_frame_rate = config['general']['pub_frame_rate']
-            depth_mode = config['depth']['depth_mode'].replace('_', '')
-            point_cloud_freq = config['depth']['point_cloud_freq']
-            depth_confidence = config['depth']['depth_confidence']
-            depth_texture_conf = config['depth']['depth_texture_conf']
+        USE_ZED_CONFIG_SUFFIX = False # TODO read the optional argument from the config file
 
-            zed_wrapper_properties_suffix = f'-pdf{pub_downscale_factor}_pfr{pub_frame_rate}_dm{depth_mode}_pcf{point_cloud_freq}_dc{depth_confidence}_dtf{depth_texture_conf}'
-        
-            self.save_dir = f'{self.save_dir}{zed_wrapper_properties_suffix}'
+        if USE_ZED_CONFIG_SUFFIX:
+            with open('/home/colino/hawk/zed_wrapper_config/common.yaml', 'r') as file: # TODO read the path from the config file
+                config = yaml.load(file, Loader=yaml.FullLoader)
+                config = config['/**']['ros__parameters']
+                pub_downscale_factor = config['general']['pub_downscale_factor']
+                pub_frame_rate = config['general']['pub_frame_rate']
+                depth_mode = config['depth']['depth_mode'].replace('_', '')
+                point_cloud_freq = config['depth']['point_cloud_freq']
+                depth_confidence = config['depth']['depth_confidence']
+                depth_texture_conf = config['depth']['depth_texture_conf']
 
-            print(f'\nsave_dir after zed_wrapper_properties_suffix: {self.save_dir}')
+                zed_wrapper_properties_suffix = f'-pdf{pub_downscale_factor}_pfr{pub_frame_rate}_dm{depth_mode}_pcf{point_cloud_freq}_dc{depth_confidence}_dtf{depth_texture_conf}'
+            
+                self.save_dir = f'{self.save_dir}{zed_wrapper_properties_suffix}'
+
+                print(f'\nsave_dir after zed_wrapper_properties_suffix: {self.save_dir}')
 
         # create the save directory if it does not exist
         if not os.path.exists(self.save_dir):
