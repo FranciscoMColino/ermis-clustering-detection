@@ -4,7 +4,7 @@ from sensor_msgs.msg import PointCloud2
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header, String, UInt32
 from geometry_msgs.msg import Point
-from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D
+from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D, EmberBoundingBox3DArray
 import sensor_msgs_py.point_cloud2 as pc2
 import pypatchworkpp
 
@@ -42,9 +42,16 @@ def clustering_visualizer_worker(clustering_queue):
 
     visualizer = Open3DClusteringVisualizer()
     while True:
+
+        if clustering_queue.empty():
+            visualizer.render()
+            time.sleep(1/120)
+            continue
+
         data = clustering_queue.get()
         if data is None:
             break
+            
         visualizer.reset()
         clusters_points_list = data['cluster_points_list']
         bb_points_list = data['bb_points_list']
@@ -132,9 +139,13 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
             '/zed/zed_node/pose',
             self.pose_callback,
             10)
-        self.cluster_bbox_pub = self.create_publisher(
+        self.cluster_array_pub = self.create_publisher(
             EmberClusterArray, 
-            '/ember_detection/ember_cluster_array', 
+            '/ember_detection/ermis_cluster_array', 
+            10)
+        self.bbox_array_pub = self.create_publisher(
+            EmberBoundingBox3DArray, 
+            '/ember_detection/ermis_bbox_array', 
             10)
 
         self.cloud_subscription  # prevent unused variable warning
@@ -213,9 +224,6 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
                     exit(1)
         else:
             print('No configuration file provided. Exiting...')
-            # Clear and update the visualizer
-            self.vis.poll_events()
-            self.vis.update_renderer()
             exit(1)
 
     def pose_callback(self, msg):
@@ -245,11 +253,14 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
         # Open3D point cloud pre-processing
         self.pcd.points = o3d.utility.Vector3dVector(points)
 
+        TRANSFORM_POSE = False # FOR DEBUGGING FOR NOW TODO: make this a configuration
+
         current_pose = None
         if self.current_pose is not None:
             current_pose = self.current_pose.pose
-            transformation_matrix = pose_msg_to_transform_matrix(current_pose)
-            self.pcd.transform(transformation_matrix)
+            if TRANSFORM_POSE:
+                transformation_matrix = pose_msg_to_transform_matrix(current_pose)
+                self.pcd.transform(transformation_matrix)
         
         self.pcd.points = apply_voxel_downsampling(self.pcd, 
                                                    voxel_size=self.voxel_downsample_config.voxel_size)
@@ -312,7 +323,10 @@ class ClusterBboxDetectionWithPoseTransformPublisherNode(Node):
 
         ### transform to ROS2 message
         ember_cluster_array = build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, current_pose)
-        self.cluster_bbox_pub.publish(ember_cluster_array)
+        self.cluster_array_pub.publish(ember_cluster_array)
+        ember_bbox_array = build_ember_bbox_array_msg(
+            [get_points_from_o3dbbox(bb) for bb in bb_list], msg.header)
+        self.bbox_array_pub.publish(ember_bbox_array)
         ###
 
         elapsed_time = time.time() - start

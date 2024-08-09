@@ -5,7 +5,7 @@ import sensor_msgs_py.point_cloud2 as pc2
 
 from std_msgs.msg import Header, String, UInt32
 from geometry_msgs.msg import Point
-from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D
+from ember_detection_interfaces.msg import EmberCluster, EmberClusterArray, EmberBoundingBox3D, EmberBoundingBox3DArray
 
 def organize_clusters(points, labels):
     # DOn't add in the -1 cluster (noise)
@@ -118,6 +118,14 @@ def pose_msg_to_transform_matrix(pose):
 
     return transformation_matrix
 
+def build_ember_bbox(points, label=None):
+    ember_bbox = EmberBoundingBox3D()
+    for point in points:
+        ember_bbox.points.append(Point(x=point[0], y=point[1], z=point[2]))
+    ember_bbox.det_label = String(data= 'none' if label is None else label) # 'none' is the default label if no label is provided
+    ember_bbox.points_count = UInt32(data=len(points))
+    return ember_bbox
+
 def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, pose = None):
     ember_cluster_array = EmberClusterArray()
     ember_cluster_array.header = msg.header
@@ -130,6 +138,7 @@ def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, pose = None
         ember_cluster.point_cloud = cluster_pc2
         ember_cluster.centroid = Point(x=centroids[i][0], y=centroids[i][1], z=centroids[i][2])
 
+        # TODO use function to build ember bounding box
         ember_bbox = EmberBoundingBox3D()
         ember_bbox.det_label = String(data='default')
         bbox_points = np.asarray(bb_list[i].get_box_points())
@@ -143,6 +152,30 @@ def build_ember_cluster_array_msg(pcd_list, bb_list, centroids, msg, pose = None
     ember_cluster_array.pose = pose
 
     return ember_cluster_array
+
+def get_points_from_o3dbbox(aabbox):
+    points = aabbox.get_box_points()
+    return np.asarray(points)
+
+def build_ember_bbox_array_msg(bboxes, header=None):
+    """
+    Build an array of EmberBoundingBox messages from a list of bounding boxes.
+    
+    Args:
+    - bboxes: list of bounding boxes, where each bounding box is a list of 8 points (x, y, z)
+    
+    Returns:
+    - array of EmberBoundingBox messages
+    """
+    bboxes_msg = EmberBoundingBox3DArray()
+    for bbox in bboxes:
+        bboxes_msg.boxes.append(build_ember_bbox(bbox))
+    if header is not None:
+        bboxes_msg.header = Header(stamp=header.stamp)
+    else:
+        bboxes_msg.header = Header()
+
+    return bboxes_msg
 
 def create_box_lines(x_range, y_range, z_range, color=[0.3, 0.3, 0.3]):
     lines = [
